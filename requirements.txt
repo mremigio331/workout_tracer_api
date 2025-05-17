@@ -1,1 +1,4 @@
 fastapi
+uvicorn
+mangum
+aws_lambda_powertools
