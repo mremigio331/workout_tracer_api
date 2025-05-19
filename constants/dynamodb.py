@@ -1,0 +1,1 @@
+WORKOUT_TRACER_USER_TABLE = "WorkoutTracer-UserTable"

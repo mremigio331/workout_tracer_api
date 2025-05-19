@@ -2,3 +2,5 @@ fastapi
 uvicorn
 mangum
 aws_lambda_powertools
+pydantic_core
+boto3
