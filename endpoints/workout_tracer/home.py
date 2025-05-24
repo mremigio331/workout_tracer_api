@@ -8,7 +8,7 @@ logger = Logger(service="workout-tracer-api")
 router = APIRouter()
 
 
-@router.get("/", summary="Home Endpoint", response_description="Welcome message")
+@router.get(path='/', summary="Home Endpoint", response_description="Welcome message")
 async def home():
     """
     Home Endpoint

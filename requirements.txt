@@ -1,6 +1,6 @@
+pydantic[email]
 fastapi
-uvicorn
-mangum
-aws_lambda_powertools
-pydantic_core
 boto3
+aws_lambda_powertools
+mangum
+uvicorn
