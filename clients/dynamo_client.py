@@ -1,7 +1,7 @@
+import os
 from aws_lambda_powertools import Logger
 import boto3
 from botocore.exceptions import ClientError
-from constants.dynamodb import WORKOUT_TRACER_USER_TABLE
 
 
 class WorkoutTracerDynamoDBClient:
@@ -11,7 +11,8 @@ class WorkoutTracerDynamoDBClient:
 
     def __init__(self):
         self.dynamodb = boto3.resource("dynamodb", region_name="us-west-2")
-        self.table = self.dynamodb.Table(WORKOUT_TRACER_USER_TABLE)
+        table_name = os.getenv("TABLE_NAME", "WorkoutTracer-UserTable-Staging")
+        self.table = self.dynamodb.Table(table_name)
 
         self.logger = Logger()
 

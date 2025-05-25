@@ -4,6 +4,7 @@ from aws_lambda_powertools import Logger
 from exceptions.user_exceptions import InvalidUserIdException, UserNotFound
 from decorators.exceptions_decorator import exceptions_decorator
 from clients.dynamo_client import WorkoutTracerDynamoDBClient
+from helpers.jwt import decode_jwt
 
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
@@ -22,23 +23,25 @@ def get_user_profile(user_id: str, request: Request):
     logger.info("Getting request for user profile.")
     logger.info(f"User ID: {user_id}")
 
-    event = request.scope.get("aws.event")
-    claims = None
-    if event:
-        claims = (
-            event.get("requestContext", {})
-            .get("authorizer", {})
-            .get("jwt", {})
-            .get("claims", {})
-        )
-
-    logger.info(f"Claims: {claims}")
-    token_user_id = claims.get("sub") if claims else None
+    # Extract JWT from Authorization header and decode
+    auth_header = request.headers.get("authorization")
+    token_user_id = None
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        try:
+            claims = decode_jwt(token)
+            token_user_id = claims.get("sub")
+        except Exception as e:
+            logger.warning(f"JWT decode failed: {e}")
+            token_user_id = None
 
     logger.info(f"Token User ID: {token_user_id}")
 
-    if not user_id or not token_user_id:
+    if not user_id:
         raise InvalidUserIdException("User ID is required.")
+
+    if not token_user_id:
+        raise InvalidUserIdException("Token User ID is required.")
 
     dynamo = WorkoutTracerDynamoDBClient()
     user_profile = dynamo.get_user_profile(user_id=user_id)

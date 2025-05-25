@@ -1,7 +1,6 @@
 from aws_lambda_powertools import Logger
 import boto3
 from botocore.exceptions import ClientError
-from constants.dynamodb import WORKOUT_TRACER_USER_TABLE
 from dynamodb.models.user_profile_model import UserProfileModel
 from datetime import datetime
 import os

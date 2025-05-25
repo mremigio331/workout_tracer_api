@@ -3,6 +3,8 @@ from mangum import Mangum
 from aws_lambda_powertools import Logger
 from middleware.request_id_middlware import RequestIdMiddleware
 from endpoints.get_all_routes import get_all_routes
+from fastapi.middleware.cors import CORSMiddleware
+
 
 logger = Logger(service="workout-tracer-api")
 app = FastAPI(
@@ -14,6 +16,13 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestIdMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or restrict to your frontend domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app = get_all_routes(app)
 
 handler = Mangum(app)

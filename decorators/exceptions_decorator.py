@@ -1,5 +1,11 @@
 from functools import wraps
 from exceptions.user_exceptions import UserNotFound, InvalidUserIdException
+from exceptions.jwt_exeptions import (
+    InvalidJWTException,
+    ExpiredJWTException,
+    MissingJWTException,
+    JWTSignatureException,
+)
 from fastapi.responses import JSONResponse
 from botocore.exceptions import ClientError
 
@@ -18,6 +24,18 @@ def exceptions_decorator(func):
         except InvalidUserIdException as exc:
             return JSONResponse(
                 content={"message": str(exc) or "Invalid user ID."}, status_code=400
+            )
+        except (InvalidJWTException, JWTSignatureException) as exc:
+            return JSONResponse(
+                content={"message": str(exc) or "Invalid JWT."}, status_code=401
+            )
+        except ExpiredJWTException as exc:
+            return JSONResponse(
+                content={"message": str(exc) or "JWT expired."}, status_code=401
+            )
+        except MissingJWTException as exc:
+            return JSONResponse(
+                content={"message": str(exc) or "JWT missing."}, status_code=401
             )
 
         ### 5XX
