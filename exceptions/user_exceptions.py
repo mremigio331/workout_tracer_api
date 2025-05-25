@@ -5,6 +5,7 @@ class InvalidUserIdException(Exception):
         self.message = message
         super().__init__(self.message)
 
+
 class UserNotFound(Exception):
     """Exception raised when a user is not found in the database."""
 

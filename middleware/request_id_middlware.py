@@ -5,6 +5,7 @@ import uuid
 
 logger = Logger(service=SERVICE_NAME)
 
+
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         context = request.scope.get("aws.context")

@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import base64
 
+
 def handler(event, context):
     headers = event["headers"]
     signature = headers.get("x-hub-signature-256")
@@ -11,9 +12,9 @@ def handler(event, context):
         body = base64.b64decode(body).decode()
 
     secret = os.environ["GITHUB_SECRET"]
-    computed_sig = "sha256=" + hmac.new(
-        secret.encode(), body.encode(), hashlib.sha256
-    ).hexdigest()
+    computed_sig = (
+        "sha256=" + hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+    )
 
     if hmac.compare_digest(computed_sig, signature or ""):
         return {

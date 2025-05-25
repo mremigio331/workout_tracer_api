@@ -8,6 +8,7 @@ import time
 logger = Logger(service="WorkoutTracer-Pipeline-Deployment")
 client = boto3.client("codepipeline")
 
+
 @logger.inject_lambda_context
 def handler(event: dict, context) -> dict:
     logger.debug(f"Received event: {event}")
@@ -21,6 +22,7 @@ def handler(event: dict, context) -> dict:
     body = event.get("body", "")
     if event.get("isBase64Encoded"):
         import base64
+
         body = base64.b64decode(body).decode()
 
     payload = json.loads(body)
@@ -38,8 +40,7 @@ def handler(event: dict, context) -> dict:
 
     try:
         response = client.start_pipeline_execution(
-            name=pipeline,
-            clientRequestToken=client_request_token
+            name=pipeline, clientRequestToken=client_request_token
         )
     except Exception as e:
         logger.exception(f"Failed to start pipeline execution: {e}")
@@ -53,11 +54,13 @@ def handler(event: dict, context) -> dict:
 
     return {
         "statusCode": 200,
-        "body": json.dumps({
-            "message": "Pipeline execution started",
-            "pipelineExecutionId": response["pipelineExecutionId"],
-            "repo": repo,
-            "commit_id": commit_id,
-            "commit_message": commit_message
-        })
+        "body": json.dumps(
+            {
+                "message": "Pipeline execution started",
+                "pipelineExecutionId": response["pipelineExecutionId"],
+                "repo": repo,
+                "commit_id": commit_id,
+                "commit_message": commit_message,
+            }
+        ),
     }

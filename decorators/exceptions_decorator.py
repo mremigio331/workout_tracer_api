@@ -9,23 +9,22 @@ def exceptions_decorator(func):
     async def wrapper(*args, **kwargs):
         try:
             return await func(*args, **kwargs)
-        
+
         # 4XX
         except UserNotFound as exc:
             return JSONResponse(
-                content={"message": str(exc) or "User not found."},
-                status_code=404
+                content={"message": str(exc) or "User not found."}, status_code=404
             )
         except InvalidUserIdException as exc:
             return JSONResponse(
-                content={"message": str(exc) or "Invalid user ID."},
-                status_code=400
+                content={"message": str(exc) or "Invalid user ID."}, status_code=400
             )
-        
+
         ### 5XX
         except ClientError as exc:
             return JSONResponse(
                 content={"message": str(exc) or "Internal server error."},
-                status_code=500
+                status_code=500,
             )
+
     return wrapper

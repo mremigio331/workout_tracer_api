@@ -6,14 +6,15 @@ from dynamodb.models.user_profile_model import UserProfileModel
 from datetime import datetime
 import os
 
+
 class UserProfileHelper:
     """
     A class to interact with DynamoDB for the WorkoutTracer application.
     """
 
     def __init__(self):
-        self.dynamodb = boto3.resource('dynamodb', region_name="us-west-2")
-        table_name = os.getenv("TABLE_NAME", 'WorkoutTracer-UserTable-Staging')
+        self.dynamodb = boto3.resource("dynamodb", region_name="us-west-2")
+        table_name = os.getenv("TABLE_NAME", "WorkoutTracer-UserTable-Staging")
         self.table = self.dynamodb.Table(table_name)
         self.logger = Logger()
 
@@ -23,10 +24,7 @@ class UserProfileHelper:
         Assumes PK is 'USER#{user_id}' and SK is 'PROFILE'.
         """
         profile = UserProfileModel(
-            user_id=user_id,
-            email=email,
-            name=name,
-            created_at=datetime.utcnow()
+            user_id=user_id, email=email, name=name, created_at=datetime.utcnow()
         )
         item = profile.to_dynamodb()
 
@@ -43,12 +41,9 @@ class UserProfileHelper:
         """
         try:
             response = self.table.get_item(
-                Key={
-                    'PK': f'#USER:{user_id}',
-                    'SK': 'PROFILE'
-                }
+                Key={"PK": f"#USER:{user_id}", "SK": "PROFILE"}
             )
-            item = response.get('Item')
+            item = response.get("Item")
             if item:
                 self.logger.info(f"Fetched user profile for {user_id}: {item}")
                 return UserProfileModel.from_dynamodb(item)

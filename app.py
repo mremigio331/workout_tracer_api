@@ -10,7 +10,7 @@ app = FastAPI(
     description="API for WorkoutTracer application.",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 app.add_middleware(RequestIdMiddleware)
