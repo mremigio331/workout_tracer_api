@@ -24,7 +24,7 @@ class WorkoutTracerDynamoDBClient:
         try:
             response = self.table.get_item(
                 Key={
-                    "PK": "#USER:d8d183a0-5021-70d9-0045-19984f484e3a",
+                    "PK": f"#USER:{user_id}",
                     "SK": "PROFILE",
                 }
             )
