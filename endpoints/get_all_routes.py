@@ -1,5 +1,5 @@
 from endpoints.workout_tracer import home
-from endpoints.user import get_user_profile
+from endpoints.user import get_user_profile, update_user_profile
 
 
 def get_all_routes(app):
@@ -10,5 +10,6 @@ def get_all_routes(app):
 
     # User
     app.include_router(get_user_profile.router, prefix="/user", tags=["User"])
+    app.include_router(update_user_profile.router, prefix="/user", tags=["User"])
 
     return app

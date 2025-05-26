@@ -5,6 +5,7 @@ from aws_lambda_powertools import Logger
 
 logger = Logger(service="workout-tracer-api")
 
+
 class JWTMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Log all headers as seen by JWT middleware
@@ -20,9 +21,8 @@ class JWTMiddleware(BaseHTTPMiddleware):
         if not token_user_id:
             raise HTTPException(
                 status_code=401,
-                detail="Token not found or invalid. User does not have access."
+                detail="Token not found or invalid. User does not have access.",
             )
         request.state.user_token = token_user_id
         response = await call_next(request)
         return response
-
