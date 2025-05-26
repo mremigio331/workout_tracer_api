@@ -4,7 +4,9 @@ from aws_lambda_powertools import Logger
 from middleware.request_id_middlware import RequestIdMiddleware
 from endpoints.get_all_routes import get_all_routes
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.datastructures import MutableHeaders
 import os
+import configparser
 
 
 logger = Logger(service="workout-tracer-api")
@@ -30,6 +32,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Middleware to inject Authorization header in dev/test environments
+if stage not in ("prod", "staging"):
+
+    @app.middleware("http")
+    async def add_dev_id_token(request: Request, call_next):
+        config = configparser.ConfigParser()
+        config.read("dev_creds.cfg")
+        id_token = config.get("default", "id_token", fallback=None)
+        if id_token:
+            # Correct way: modify the ASGI scope headers directly
+            headers = list(request.scope.get("headers", []))
+            # Only add if not already present
+            if not any(k == b"authorization" for k, v in headers):
+                headers.append(
+                    (b"authorization", f"Bearer {id_token}".encode("latin-1"))
+                )
+                request.scope["headers"] = headers
+        response = await call_next(request)
+        return response
+
+
 app = get_all_routes(app)
 
 handler = Mangum(app)
