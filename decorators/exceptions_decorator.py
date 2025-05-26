@@ -1,5 +1,9 @@
 from functools import wraps
-from exceptions.user_exceptions import UserNotFound, InvalidUserIdException
+from exceptions.user_exceptions import (
+    UserNotFound,
+    InvalidUserIdException,
+    ProfileNotPublicOrDoesNotExist,
+)
 from exceptions.jwt_exeptions import (
     InvalidJWTException,
     ExpiredJWTException,
@@ -12,9 +16,9 @@ from botocore.exceptions import ClientError
 
 def exceptions_decorator(func):
     @wraps(func)
-    async def wrapper(*args, **kwargs):
+    def wrapper(*args, **kwargs):
         try:
-            return await func(*args, **kwargs)
+            return func(*args, **kwargs)
 
         # 4XX
         except UserNotFound as exc:
@@ -36,6 +40,14 @@ def exceptions_decorator(func):
         except MissingJWTException as exc:
             return JSONResponse(
                 content={"message": str(exc) or "JWT missing."}, status_code=401
+            )
+        except ProfileNotPublicOrDoesNotExist as e:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "message": str(e)
+                    or "Access denied: profile is not public or does not exist."
+                },
             )
 
         ### 5XX
