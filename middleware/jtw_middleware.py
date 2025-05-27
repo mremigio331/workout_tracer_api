@@ -8,7 +8,6 @@ logger = Logger(service="workout-tracer-api")
 
 class JWTMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Log all headers as seen by JWT middleware
         auth_header = request.headers.get("authorization")
         token_user_id = None
         if auth_header and auth_header.startswith("Bearer "):
@@ -19,10 +18,14 @@ class JWTMiddleware(BaseHTTPMiddleware):
             except Exception as e:
                 logger.warning(f"JWT decode failed: {e}")
         if not token_user_id:
-            raise HTTPException(
-                status_code=401,
-                detail="Token not found or invalid. User does not have access.",
-            )
+            # If the request is for the docs, show a Swagger-friendly message
+            if request.url.path == "/docs":
+                from starlette.responses import HTMLResponse
+
+                return HTMLResponse(
+                    "<h2>Access Denied</h2><p>You do not have access to the API docs.</p>",
+                    status_code=401,
+                )
         request.state.user_token = token_user_id
         response = await call_next(request)
         return response

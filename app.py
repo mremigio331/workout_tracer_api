@@ -5,7 +5,8 @@ from middleware.request_id_middlware import RequestIdMiddleware
 from endpoints.get_all_routes import get_all_routes
 from fastapi.middleware.cors import CORSMiddleware
 from middleware.jtw_middleware import JWTMiddleware
-from helpers.jwt import inject_dev_token
+from helpers.jwt import inject_user_token
+from middleware.cognito_auth_middleware import CognitoAuthMiddleware
 import os
 import configparser
 
@@ -25,9 +26,10 @@ if stage == "prod":
 else:
     allowed_origins = ["*"]
 
-if stage == "dev":
-    logger.info("Running in development mode, allowing all origins for CORS.")
-    inject_dev_token()
+if stage in ("dev", "staging"):
+    logger.info(f"Running in {stage} mode, allowing all origins for CORS.")
+    app.add_middleware(CognitoAuthMiddleware)
+    inject_user_token()
     logger.info("Dev token injection enabled.")
 
 

@@ -6,6 +6,9 @@ import os
 from aws_lambda_powertools import Logger
 from starlette.requests import Request as StarletteRequest
 import boto3
+import contextvars
+from starlette.requests import Request as StarletteRequest
+import contextvars
 
 logger = Logger(service="workout-tracer-api")
 
@@ -25,28 +28,45 @@ def decode_jwt(token: str) -> dict:
         raise InvalidJWTException(f"Invalid JWT: {e}")
 
 
-def inject_dev_token():
+def inject_user_token():
     config = configparser.ConfigParser()
     # dev_creds.cfg is in the workout_tracer_api directory (NOT helpers)
-    cfg_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dev_creds.cfg")
+    cfg_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dev_creds.cfg"
+    )
     logger.info(f"Injecting dev token: Reading config from {cfg_path}")
     config.read(cfg_path)
-    id_token = config.get("default", "id_token", fallback=None)
-    if id_token:
-        orig_init = StarletteRequest.__init__
-        def new_init(self, *args, **kwargs):
-            scope = args[0]
-            headers = list(scope.get("headers", []))
-            if not any(k == b"authorization" for k, v in headers):
-                headers.append(
-                    (b"authorization", f"Bearer {id_token}".encode("latin-1"))
-                )
-                scope["headers"] = headers
-            orig_init(self, *args, **kwargs)
-        StarletteRequest.__init__ = new_init
-        logger.info("Injecting dev token: Authorization header will be injected into all requests.")
-    else:
-        logger.warning("Injecting dev token: No id_token found in dev_creds.cfg.")
+    file_id_token = config.get("default", "id_token", fallback=None)
+
+    # Use contextvar to get the current request if available
+    _request_var = contextvars.ContextVar("starlette_request")
+
+    orig_init = StarletteRequest.__init__
+
+    def new_init(self, *args, **kwargs):
+        scope = args[0]
+        # Try to get id_token from cookies if present
+        id_token = None
+        headers = list(scope.get("headers", []))
+        # Find the cookie header
+        cookie_header = next((v for k, v in headers if k == b"cookie"), None)
+        if cookie_header:
+            cookies = cookie_header.decode("latin-1").split(";")
+            for cookie in cookies:
+                if cookie.strip().startswith("id_token="):
+                    id_token = cookie.strip().split("=", 1)[1]
+                    break
+        if not id_token:
+            id_token = file_id_token
+        if id_token and not any(k == b"authorization" for k, v in headers):
+            headers.append((b"authorization", f"Bearer {id_token}".encode("latin-1")))
+            scope["headers"] = headers
+        orig_init(self, *args, **kwargs)
+
+    StarletteRequest.__init__ = new_init
+    logger.info(
+        "Injecting dev token: Authorization header will be injected into all requests."
+    )
 
 
 def update_cognito_user_attributes(
