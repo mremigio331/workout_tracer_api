@@ -11,5 +11,6 @@ export COGNITO_CLIENT_ID=$(aws cognito-idp list-user-pools --max-results 60 --re
 export COGNITO_REGION="us-west-2"
 export COGNITO_API_REDIRECT_URI="http://localhost:5000/"
 export COGNITO_DOMAIN="https://workouttracer-staging.auth.us-west-2.amazoncognito.com"
+export KMS_KEY_ARN=$(aws kms describe-key --key-id alias/WorkoutTracer/API/Staging --query "KeyMetadata.Arn"  --region us-west-2 --output text)
 
 uvicorn app:app --reload --port 5000
