@@ -34,9 +34,10 @@ class UserProfileHelper:
             self.logger.error(f"Error creating user profile for {user_id}: {e}")
             raise
 
-    def get_user_profile(self, user_id: str) -> UserProfileModel | None:
+    def get_user_profile(self, user_id: str) -> dict | None:
         """
         Fetch a user profile from DynamoDB by user_id.
+        Returns a dict with user_id, email, name, and public_profile.
         """
         try:
             response = self.table.get_item(
@@ -45,7 +46,20 @@ class UserProfileHelper:
             item = response.get("Item")
             if item:
                 self.logger.info(f"Fetched user profile for {user_id}: {item}")
-                return UserProfileModel.from_dynamodb(item)
+                # Extract user_id from PK
+                pk_value = item.get("PK", "")
+                user_id_value = (
+                    pk_value.replace("#USER:", "")
+                    if pk_value.startswith("#USER:")
+                    else pk_value
+                )
+                result = {
+                    "user_id": user_id_value,
+                    "email": item.get("email"),
+                    "name": item.get("name"),
+                    "public_profile": item.get("public_profile"),
+                }
+                return result
             else:
                 self.logger.info(f"No user profile found for {user_id}")
                 return None

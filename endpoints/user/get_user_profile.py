@@ -7,15 +7,17 @@ from exceptions.user_exceptions import (
     ProfileNotPublicOrDoesNotExist,
 )
 from decorators.exceptions_decorator import exceptions_decorator
-from clients.dynamo_client import WorkoutTracerDynamoDBClient
 from helpers.jwt import decode_jwt
+from dynamodb.helpers.user_profile_helper import UserProfileHelper
 
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
 
 
 @router.get(
-    "/profile", summary="Get a user profile", response_description="The user's profile"
+    "/profile/public",
+    summary="Get a user profile",
+    response_description="The user's profile",
 )
 @exceptions_decorator
 def get_user_profile(user_id: str, request: Request):
@@ -26,17 +28,7 @@ def get_user_profile(user_id: str, request: Request):
     """
     logger.info("Getting request for user profile.")
 
-    # Extract JWT from Authorization header and decode
-    auth_header = request.headers.get("authorization")
-    token_user_id = None
-    if auth_header and auth_header.startswith("Bearer "):
-        token = auth_header.split(" ")[1]
-        try:
-            claims = decode_jwt(token)
-            token_user_id = claims.get("sub")
-        except Exception as e:
-            logger.warning(f"JWT decode failed: {e}")
-            token_user_id = None
+    token_user_id = getattr(request.state, "user_token", None)
 
     if not user_id:
         logger.warning("User ID not provided in request.")
@@ -46,15 +38,16 @@ def get_user_profile(user_id: str, request: Request):
         logger.warning("Token User ID could not be extracted from JWT.")
         raise InvalidUserIdException("Token User ID is required.")
 
-    dynamo = WorkoutTracerDynamoDBClient()
-    user_profile_data = dynamo.get_user_profile(user_id=user_id)
+    # Use the helper directly
+    user_helper = UserProfileHelper()
+    user_profile_data = user_helper.get_user_profile(user_id=user_id)
     if not user_profile_data:
         logger.warning(f"User profile not found for user_id: {user_id}")
         raise UserNotFound(f"User with ID {user_id} not found.")
 
-    # Interact with the raw dict
+    # Interact with the returned dict
     public_profile = user_profile_data.get("public_profile")
-    db_user_id = user_profile_data.get("PK").split(":")[1]
+    db_user_id = user_profile_data.get("user_id")
 
     logger.info(f"Public profile flag: {public_profile}")
 
