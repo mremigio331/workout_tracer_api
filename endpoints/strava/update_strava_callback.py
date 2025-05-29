@@ -20,7 +20,7 @@ class UpdateStravaCallback(BaseModel):
 
 
 @router.put(
-    "/profile/strava/callback",
+    "/profile/callback",
     summary="Update all Strava info for a user",
     response_description="Updated Strava info",
 )

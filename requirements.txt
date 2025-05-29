@@ -1,6 +1,10 @@
-pydantic[email]
-fastapi
-boto3
 aws_lambda_powertools
+boto3
+botocore
+datetime
+fastapi
+httpx
 mangum
+pydantic[email]
+requests
 uvicorn
