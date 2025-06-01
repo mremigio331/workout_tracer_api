@@ -9,4 +9,3 @@ class StravaCredentialsModel(BaseModel):
     expires_in: int
     refresh_token: str
     access_token: str
-

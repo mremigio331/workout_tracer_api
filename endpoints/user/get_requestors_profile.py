@@ -13,6 +13,7 @@ from dynamodb.helpers.user_profile_helper import UserProfileHelper
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
 
+
 @router.get(
     "/profile", summary="Get a user profile", response_description="The user's profile"
 )

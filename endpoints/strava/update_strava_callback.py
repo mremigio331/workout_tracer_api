@@ -16,8 +16,10 @@ import decimal
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
 
+
 class UpdateStravaCallback(BaseModel):
     auth_code: str = Field(..., description="The authorization code from Strava")
+
 
 @router.put(
     "/profile/callback",
@@ -100,20 +102,14 @@ def update_strava_callback(
             status_code=500,
         )
 
-    
     if existing_profile:
         logger.info(f"Updating Strava profile for user_id: {user_id}")
-        strava_profile_helper.update_strava_profile(
-            **athlete_data
-        )
+        strava_profile_helper.update_strava_profile(**athlete_data)
         logger.info(f"Successfully updated Strava profile for user_id: {user_id}")
     else:
         logger.info(f"Creating new Strava profile for user_id: {user_id}")
-        strava_profile_helper.create_strava_profile(
-            **athlete_data
-        )
+        strava_profile_helper.create_strava_profile(**athlete_data)
         logger.info(f"Successfully created Strava profile for user_id: {user_id}")
-
 
     try:
         strava_credentials_helper.create_or_update_credentials(
@@ -122,7 +118,7 @@ def update_strava_callback(
             expires_in=tokens.get("expires_in"),
             refresh_token=tokens.get("refresh_token"),
             access_token=tokens.get("access_token"),
-            user_id=user_id
+            user_id=user_id,
         )
         logger.info("Successfully stored Strava credentials.")
     except Exception as e:

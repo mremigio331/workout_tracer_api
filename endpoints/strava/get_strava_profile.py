@@ -10,6 +10,7 @@ router = APIRouter()
 
 strava_helper = StravaProfileHelper()
 
+
 @router.get(
     "/profile/public",
     summary="Get a user's Strava profile",
@@ -30,8 +31,6 @@ def get_strava_profile(user_id: str, request: Request):
             content={"error": "Strava profile not found."}, status_code=404
         )
     return JSONResponse(
-        content={
-            "strava_profile": strava_profile
-        },
+        content={"strava_profile": strava_profile},
         status_code=200,
     )

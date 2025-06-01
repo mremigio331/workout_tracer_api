@@ -6,6 +6,7 @@ from datetime import datetime
 from dynamodb.helpers.audit_actions_helper import AuditActions, AuditActionHelper
 import os
 
+
 class UserProfileHelper:
     """
     A class to interact with DynamoDB for the WorkoutTracer application.
@@ -97,7 +98,8 @@ class UserProfileHelper:
         """
         # Use locals() to build updated_changes dict
         updated_changes = {
-            key: value for key, value in locals().items()
+            key: value
+            for key, value in locals().items()
             if key not in ("self", "user_id") and value is not None
         }
 

@@ -28,7 +28,7 @@ def get_requestor_strava_profile(request: Request):
         return JSONResponse(
             content={"error": "User ID not found in request."}, status_code=400
         )
-    
+
     strava_profile = strava_profile_helper.get_strava_profile(user_id=user_id)
 
     if not strava_profile:
@@ -36,6 +36,4 @@ def get_requestor_strava_profile(request: Request):
         return JSONResponse(
             content={"error": "Strava profile not found."}, status_code=404
         )
-    return JSONResponse(
-        content={"athlete": strava_profile}, status_code=200
-    )
+    return JSONResponse(content={"athlete": strava_profile}, status_code=200)

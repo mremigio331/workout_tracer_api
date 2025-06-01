@@ -6,6 +6,7 @@ from botocore.exceptions import ClientError
 import boto3
 import os
 
+
 class AuditActions(Enum):
     CREATE = "create"
     UPDATE = "update"
@@ -27,15 +28,9 @@ class AuditActionHelper:
         table_name = os.getenv("TABLE_NAME", "WorkoutTracer-UserTable-Staging")
         self.table = self.dynamodb.Table(table_name)
         self.logger = Logger()
-    
 
     def create_audit_record(
-        self,
-        user_id: str,
-        sk: str,
-        action: str,
-        before: Any,
-        after: Any
+        self, user_id: str, sk: str, action: str, before: Any, after: Any
     ) -> dict:
         """
         Create or append an audit record for user profile changes.
@@ -79,7 +74,9 @@ class AuditActionHelper:
                     "records": [audit_entry],
                 }
                 self.table.put_item(Item=audit_item)
-                self.logger.info(f"Created new audit record for {user_id}: {audit_item}")
+                self.logger.info(
+                    f"Created new audit record for {user_id}: {audit_item}"
+                )
                 return audit_item
         except ClientError as e:
             self.logger.error(f"Error creating audit record for {user_id}: {e}")

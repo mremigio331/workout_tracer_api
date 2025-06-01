@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 import base64
 
+
 class StravaCredentialsHelper:
     """
     Helper class to interact with DynamoDB for Strava API credentials.
@@ -82,10 +83,7 @@ class StravaCredentialsHelper:
             before_item = self.table.get_item(
                 Key={"PK": f"#USER:{user_id}", "SK": self.sk}
             ).get("Item")
-            before = (
-                StravaCredentialsModel(**before_item)
-                if before_item else None
-            )
+            before = StravaCredentialsModel(**before_item) if before_item else None
 
             self.table.put_item(Item=item)
             self.logger.info(f"Stored encrypted Strava credentials for {user_id}")
@@ -103,9 +101,13 @@ class StravaCredentialsHelper:
             self.audit_action_helper.create_audit_record(
                 user_id=user_id,
                 sk=self.audit_sk,
-                action=AuditActions.CREATE.value if before is None else AuditActions.UPDATE.value,
+                action=(
+                    AuditActions.CREATE.value
+                    if before is None
+                    else AuditActions.UPDATE.value
+                ),
                 before=before,
-                after=after
+                after=after,
             )
         except ClientError as e:
             self.logger.error(f"Error storing Strava credentials for {user_id}: {e}")
@@ -121,7 +123,9 @@ class StravaCredentialsHelper:
             )
             item = response.get("Item")
             if not item:
-                self.logger.warning(f"No Strava credentials found for user_id: {user_id}")
+                self.logger.warning(
+                    f"No Strava credentials found for user_id: {user_id}"
+                )
                 return None
             decrypted = {
                 "token_type": item["token_type"],
@@ -132,7 +136,9 @@ class StravaCredentialsHelper:
             }
             return decrypted
         except ClientError as e:
-            self.logger.error(f"Error retrieving Strava credentials: {e.response['Error']['Message']}")
+            self.logger.error(
+                f"Error retrieving Strava credentials: {e.response['Error']['Message']}"
+            )
             return None
         except Exception as e:
             self.logger.error(f"Error decrypting Strava credentials: {e}")
