@@ -41,8 +41,9 @@ def update_user_profile(request: Request, user_profile: UpdateUserProfileRequest
         logger.warning("User ID not found in request state.")
         raise InvalidUserIdException("User ID not found in request.")
 
-    user_profile_helper = UserProfileHelper()
     try:
+        # Use the module-level helper
+        user_profile_helper = UserProfileHelper()
         updated_profile = user_profile_helper.update_user_profile_fields(
             user_id=user_id,
             name=user_profile.name,

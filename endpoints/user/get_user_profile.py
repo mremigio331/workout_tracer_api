@@ -14,6 +14,9 @@ logger = Logger(service="workout-tracer-api")
 router = APIRouter()
 
 
+    
+
+
 @router.get(
     "/profile/public",
     summary="Get a user profile",

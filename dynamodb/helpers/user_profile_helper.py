@@ -3,8 +3,8 @@ import boto3
 from botocore.exceptions import ClientError
 from dynamodb.models.user_profile_model import UserProfileModel
 from datetime import datetime
+from dynamodb.helpers.audit_actions_helper import AuditActions, AuditActionHelper
 import os
-
 
 class UserProfileHelper:
     """
@@ -16,20 +16,35 @@ class UserProfileHelper:
         table_name = os.getenv("TABLE_NAME", "WorkoutTracer-UserTable-Staging")
         self.table = self.dynamodb.Table(table_name)
         self.logger = Logger()
+        self.sk = "USER_PROFILE"
+        self.audit_sk = "USER_PROFILE_AUDIT"
+        self.audit_action_helper = AuditActionHelper()
 
     def create_user_profile(self, user_id: str, email: str, name: str):
         """
         Create a new user profile in DynamoDB.
-        Assumes PK is 'USER#{user_id}' and SK is 'PROFILE'.
+        Assumes PK is '#USER:{user_id}' and SK is 'USER_PROFILE'.
         """
         profile = UserProfileModel(
-            user_id=user_id, email=email, name=name, created_at=datetime.utcnow()
+            user_id=user_id,
+            email=email,
+            name=name,
+            created_at=datetime.utcnow().isoformat(),  # always a string
         )
-        item = profile.to_dynamodb()
+        item = profile.dict()
+        item["PK"] = f"#USER:{user_id}"
+        item["SK"] = self.sk
 
         try:
             self.table.put_item(Item=item)
             self.logger.info(f"Created user profile for {user_id}: {item}")
+            self.audit_action_helper.create_audit_record(
+                user_id=user_id,
+                sk=self.audit_sk,
+                action=AuditActions.CREATE.value,
+                before=None,
+                after=profile,
+            )
         except ClientError as e:
             self.logger.error(f"Error creating user profile for {user_id}: {e}")
             raise
@@ -41,12 +56,11 @@ class UserProfileHelper:
         """
         try:
             response = self.table.get_item(
-                Key={"PK": f"#USER:{user_id}", "SK": "PROFILE"}
+                Key={"PK": f"#USER:{user_id}", "SK": self.sk}
             )
             item = response.get("Item")
             if item:
                 self.logger.info(f"Fetched user profile for {user_id}: {item}")
-                # Extract user_id from PK
                 pk_value = item.get("PK", "")
                 user_id_value = (
                     pk_value.replace("#USER:", "")
@@ -58,6 +72,8 @@ class UserProfileHelper:
                     "email": item.get("email"),
                     "name": item.get("name"),
                     "public_profile": item.get("public_profile"),
+                    "created_at": item.get("created_at"),
+                    "beta_features": item.get("beta_features", []),
                 }
                 return result
             else:
@@ -73,37 +89,44 @@ class UserProfileHelper:
         name: str = None,
         email: str = None,
         public_profile: bool = None,
+        beta_features: bool = None,
     ):
         """
         Update only the provided fields (name, email, public_profile) of the user profile.
         Only fields that are not None will be updated.
         """
+        # Use locals() to build updated_changes dict
+        updated_changes = {
+            key: value for key, value in locals().items()
+            if key not in ("self", "user_id") and value is not None
+        }
+
+        if not updated_changes:
+            self.logger.info(f"No fields to update for user {user_id}")
+            return None
+
         update_expr = []
         expr_attr_names = {}
         expr_attr_values = {}
 
-        if name is not None:
-            update_expr.append("#n = :name")
-            expr_attr_names["#n"] = "name"
-            expr_attr_values[":name"] = name
-        if email is not None:
-            update_expr.append("#e = :email")
-            expr_attr_names["#e"] = "email"
-            expr_attr_values[":email"] = email
-        if public_profile is not None:
-            update_expr.append("#p = :public_profile")
-            expr_attr_names["#p"] = "public_profile"
-            expr_attr_values[":public_profile"] = public_profile
-
-        if not update_expr:
-            self.logger.info(f"No fields to update for user {user_id}")
-            return None
+        for key, value in updated_changes.items():
+            placeholder_name = f"#{key[0]}"
+            placeholder_value = f":{key}"
+            update_expr.append(f"{placeholder_name} = {placeholder_value}")
+            expr_attr_names[placeholder_name] = key
+            expr_attr_values[placeholder_value] = value
 
         update_expression = "SET " + ", ".join(update_expr)
 
         try:
+            # Fetch current profile for audit
+            before_item = self.table.get_item(
+                Key={"PK": f"#USER:{user_id}", "SK": self.sk}
+            ).get("Item")
+            before = UserProfileModel(**before_item) if before_item else None
+
             response = self.table.update_item(
-                Key={"PK": f"#USER:{user_id}", "SK": "PROFILE"},
+                Key={"PK": f"#USER:{user_id}", "SK": self.sk},
                 UpdateExpression=update_expression,
                 ExpressionAttributeNames=expr_attr_names,
                 ExpressionAttributeValues=expr_attr_values,
@@ -113,21 +136,17 @@ class UserProfileHelper:
                 f"Updated user profile fields for {user_id}: {response.get('Attributes')}"
             )
             if "Attributes" in response:
-                # Convert flat dict to DynamoDB type-wrapped dict
                 attrs = response["Attributes"]
-                attrs_wrapped = {
-                    k: (
-                        {"S": v}
-                        if isinstance(v, str)
-                        else (
-                            {"BOOL": v}
-                            if isinstance(v, bool)
-                            else {"N": str(v)} if isinstance(v, (int, float)) else v
-                        )
-                    )
-                    for k, v in attrs.items()
-                }
-                return UserProfileModel.from_dynamodb(attrs_wrapped)
+                after = UserProfileModel(**attrs)
+                # Audit: before and after as UserProfileModel
+                self.audit_action_helper.create_audit_record(
+                    user_id=user_id,
+                    sk=self.audit_sk,
+                    action=AuditActions.UPDATE.value,
+                    before=before,
+                    after=after,
+                )
+                return after
             else:
                 return None
         except ClientError as e:
