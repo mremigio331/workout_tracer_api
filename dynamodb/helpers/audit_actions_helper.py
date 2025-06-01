@@ -40,13 +40,14 @@ class AuditActionHelper:
         """
         Create or append an audit record for user profile changes.
         Stores a list of audit actions under a single PK/SK.
+        Expects 'before' and 'after' to be model instances or None.
         """
         pk = f"#USER:{user_id}"
         timestamp = datetime.utcnow().isoformat()
         audit_entry = {
             "action": action,
             "before": before.dict() if before else None,
-            "after": after.dict(),
+            "after": after.dict() if after else None,
             "timestamp": timestamp,
         }
 

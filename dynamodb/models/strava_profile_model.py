@@ -1,10 +1,9 @@
 from pydantic import BaseModel
 from typing import Optional, Any
-from datetime import datetime
 
 
-class UserStravaAthleteModel(BaseModel):
-    id: int
+class StravaAthleteModel(BaseModel):
+    user_id: str
     username: Optional[str] = None
     resource_state: Optional[int] = None
     firstname: Optional[str] = None
@@ -16,20 +15,11 @@ class UserStravaAthleteModel(BaseModel):
     sex: Optional[str] = None
     premium: Optional[bool] = None
     summit: Optional[bool] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
     badge_type_id: Optional[int] = None
     weight: Optional[float] = None
     profile_medium: Optional[str] = None
     profile: Optional[str] = None
     friend: Optional[Any] = None
     follower: Optional[Any] = None
-
-
-class UserStravaModel(BaseModel):
-    token_type: str
-    expires_at: int
-    expires_in: int
-    refresh_token: str
-    access_token: str
-    athlete: UserStravaAthleteModel

@@ -2,22 +2,22 @@ from fastapi import APIRouter, Request, Body
 from fastapi.responses import JSONResponse
 from aws_lambda_powertools import Logger
 from decorators.exceptions_decorator import exceptions_decorator
-from dynamodb.helpers.user_strava_helper import UserStravaHelper
-from dynamodb.models.user_strava_model import UserStravaModel, UserStravaAthleteModel
+from dynamodb.helpers.strava_profile_helper import StravaProfileHelper
+from dynamodb.helpers.strava_credentials_helper import StravaCredentialsHelper
 from helpers.strava_helper import get_strava_api_configs
+from dynamodb.models.strava_profile_model import StravaAthleteModel
+from dynamodb.models.strava_credentials_model import StravaCredentialsModel
 from pydantic import BaseModel, Field
 import requests
-from decimal import Decimal
 from datetime import datetime
 import os
+import decimal
 
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
 
-
 class UpdateStravaCallback(BaseModel):
     auth_code: str = Field(..., description="The authorization code from Strava")
-
 
 @router.put(
     "/profile/callback",
@@ -58,7 +58,6 @@ def update_strava_callback(
     )
 
     tokens = response.json()
-    # Build UserStravaModel from tokens
     athlete_data = tokens.get("athlete", {})
     if not athlete_data or "id" not in athlete_data:
         logger.warning("Strava athlete data missing or incomplete in response.")
@@ -66,41 +65,79 @@ def update_strava_callback(
             content={"error": "Strava athlete data missing or incomplete."},
             status_code=400,
         )
-    athlete = UserStravaAthleteModel(**athlete_data)
-    strava_model = UserStravaModel(
-        token_type=tokens.get("token_type"),
-        expires_at=tokens.get("expires_at"),
-        expires_in=tokens.get("expires_in"),
-        refresh_token=tokens.get("refresh_token"),
-        access_token=tokens.get("access_token"),
-        athlete=athlete,
-    )
 
-    # Save to DynamoDB using UserStravaHelper
-    athlete_dict = UserStravaHelper.convert_floats_to_decimal(
-        strava_model.athlete.dict()
-    )
+    logger.info(f"Strava tokens and athlete data received: {athlete_data}")
 
-    strava_helper = UserStravaHelper()
-    updated = strava_helper.update_user_strava(
-        user_id=user_id,
-        token_type=strava_model.token_type,
-        expires_at=strava_model.expires_at,
-        expires_in=strava_model.expires_in,
-        refresh_token=strava_model.refresh_token,
-        access_token=strava_model.access_token,
-        athlete=athlete_dict,
-    )
+    athlete_data["strava_id"] = athlete_data.pop("id")
+    athlete_data["user_id"] = user_id
 
-    if not updated:
+    logger.info(f"Updated athlete data: {athlete_data}")
+
+    try:
+        athlete_profile = StravaAthleteModel(**athlete_data)
+        logger.info("Successfully created StravaAthleteModel instance.")
+    except Exception as e:
+        logger.error(f"Failed to create StravaAthleteModel: {e}")
         return JSONResponse(
-            content={"error": "Failed to update Strava info"}, status_code=400
+            content={"error": f"Failed to create StravaAthleteModel: {e}"},
+            status_code=500,
         )
+
+    strava_profile_helper = StravaProfileHelper()
+    strava_credentials_helper = StravaCredentialsHelper()
+
+    # Check if profile exists, then update or create accordingly
+    try:
+        existing_profile = strava_profile_helper.get_strava_profile(user_id)
+        if existing_profile:
+            logger.info(f"Existing profile found for user_id: {user_id}")
+        else:
+            logger.info(f"No existing profile found for user_id: {user_id}")
+    except Exception as e:
+        logger.error(f"Error fetching existing Strava profile: {e}")
+        return JSONResponse(
+            content={"error": f"Error fetching existing Strava profile: {e}"},
+            status_code=500,
+        )
+
+    
+    if existing_profile:
+        logger.info(f"Updating Strava profile for user_id: {user_id}")
+        strava_profile_helper.update_strava_profile(
+            **athlete_data
+        )
+        logger.info(f"Successfully updated Strava profile for user_id: {user_id}")
+    else:
+        logger.info(f"Creating new Strava profile for user_id: {user_id}")
+        strava_profile_helper.create_strava_profile(
+            **athlete_data
+        )
+        logger.info(f"Successfully created Strava profile for user_id: {user_id}")
+
+
+    try:
+        strava_credentials_helper.create_or_update_credentials(
+            token_type=tokens.get("token_type"),
+            expires_at=tokens.get("expires_at"),
+            expires_in=tokens.get("expires_in"),
+            refresh_token=tokens.get("refresh_token"),
+            access_token=tokens.get("access_token"),
+            user_id=user_id
+        )
+        logger.info("Successfully stored Strava credentials.")
+    except Exception as e:
+        logger.error(f"Error storing Strava credentials: {e}")
+        return JSONResponse(
+            content={"error": f"Error storing Strava credentials: {e}"},
+            status_code=500,
+        )
+
+    logger.info("Returning successful response to client.")
 
     return JSONResponse(
         content={
-            "message": "Strava tokens updated successfully",
-            "strava": UserStravaHelper.make_json_serializable(updated.athlete.dict()),
+            "message": "Strava tokens and profile updated successfully",
+            "athlete": athlete_profile.dict(),
         },
         status_code=200,
     )
