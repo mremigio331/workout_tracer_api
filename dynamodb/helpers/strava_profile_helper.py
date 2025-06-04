@@ -15,14 +15,16 @@ class StravaProfileHelper:
     Helper class to interact with DynamoDB for Strava athlete profile info.
     """
 
-    def __init__(self):
+    def __init__(self, request_id: str = None):
         self.dynamodb = boto3.resource("dynamodb", region_name="us-west-2")
         table_name = os.getenv("TABLE_NAME", "WorkoutTracer-UserTable-Staging")
         self.table = self.dynamodb.Table(table_name)
         self.logger = Logger()
+        if request_id:
+            self.logger.append_keys(request_id=request_id)
         self.sk = "STRAVA_PROFILE"
         self.audit_sk = "STRAVA_PROFILE_AUDIT"
-        self.audit_action_helper = AuditActionHelper()
+        self.audit_action_helper = AuditActionHelper(request_id=request_id)
 
     def create_strava_profile(
         self,

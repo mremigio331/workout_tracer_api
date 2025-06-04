@@ -4,7 +4,7 @@ from aws_lambda_powertools import Logger
 from decorators.exceptions_decorator import exceptions_decorator
 from dynamodb.helpers.strava_profile_helper import StravaProfileHelper
 from dynamodb.helpers.strava_credentials_helper import StravaCredentialsHelper
-from helpers.strava_helper import get_strava_api_configs
+from clients.strava_client import StravaClient, StravaAuthCodeExchangeError
 from dynamodb.models.strava_profile_model import StravaAthleteModel
 from dynamodb.models.strava_credentials_model import StravaCredentialsModel
 from pydantic import BaseModel, Field
@@ -34,14 +34,15 @@ def update_strava_callback(
     """
     Update all Strava info for a user. All fields are required.
     """
-    strava_keys = get_strava_api_configs()
+    logger.append_keys(request_id=request.state.request_id)
+    logger.info("Received request to update Strava callback.")
     auth_code = update_strava_callback.auth_code
     if not auth_code:
         logger.warning("Authorization code not provided in request.")
         return JSONResponse(
             content={"error": "Authorization code is required."}, status_code=400
         )
-    logger.info(f"Received auth code")
+    logger.info("Received auth code from client.")
     user_id = getattr(request.state, "user_token", None)
     if not user_id:
         logger.warning("User ID not found in request state.")
@@ -49,20 +50,21 @@ def update_strava_callback(
             content={"error": "User ID not found in request."}, status_code=400
         )
 
-    response = requests.post(
-        "https://www.strava.com/oauth/token",
-        data={
-            "client_id": strava_keys["CLIENT_ID"],
-            "client_secret": strava_keys["CLIENT_SECRET"],
-            "code": auth_code,
-            "grant_type": "authorization_code",
-        },
+    logger.info(
+        f"Attempting to exchange auth code for Strava tokens for user_id: {user_id}"
     )
+    strava_client = StravaClient(request_id=request.state.request_id)
+    try:
+        tokens, athlete_data = strava_client.get_strava_callback_url(auth_code)
+        logger.info("Successfully exchanged auth code for tokens and athlete data.")
+    except StravaAuthCodeExchangeError as e:
+        logger.error(f"StravaAuthCodeExchangeError: {e}")
+        raise
 
-    tokens = response.json()
-    athlete_data = tokens.get("athlete", {})
     if not athlete_data or "id" not in athlete_data:
-        logger.warning("Strava athlete data missing or incomplete in response.")
+        logger.warning(
+            f"Strava athlete data missing or incomplete in response. Response: {athlete_data}"
+        )
         return JSONResponse(
             content={"error": "Strava athlete data missing or incomplete."},
             status_code=400,
@@ -73,7 +75,9 @@ def update_strava_callback(
     athlete_data["strava_id"] = athlete_data.pop("id")
     athlete_data["user_id"] = user_id
 
-    logger.info(f"Updated athlete data: {athlete_data}")
+    logger.info(
+        f"Mapped athlete_data['id'] to 'strava_id' and set 'user_id': {athlete_data}"
+    )
 
     try:
         athlete_profile = StravaAthleteModel(**athlete_data)
@@ -85,11 +89,14 @@ def update_strava_callback(
             status_code=500,
         )
 
-    strava_profile_helper = StravaProfileHelper()
-    strava_credentials_helper = StravaCredentialsHelper()
+    strava_profile_helper = StravaProfileHelper(request_id=request.state.request_id)
+    strava_credentials_helper = StravaCredentialsHelper(
+        request_id=request.state.request_id
+    )
 
     # Check if profile exists, then update or create accordingly
     try:
+        logger.info(f"Checking for existing Strava profile for user_id: {user_id}")
         existing_profile = strava_profile_helper.get_strava_profile(user_id)
         if existing_profile:
             logger.info(f"Existing profile found for user_id: {user_id}")
@@ -112,6 +119,7 @@ def update_strava_callback(
         logger.info(f"Successfully created Strava profile for user_id: {user_id}")
 
     try:
+        logger.info(f"Storing Strava credentials for user_id: {user_id}")
         strava_credentials_helper.create_or_update_credentials(
             token_type=tokens.get("token_type"),
             expires_at=tokens.get("expires_at"),

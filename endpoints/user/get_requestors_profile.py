@@ -24,6 +24,7 @@ def get_requestors_profile(request: Request):
     Returns:
         A JSON response containing the user's profile information.
     """
+    logger.append_keys(request_id=request.state.request_id)
     logger.info("Getting request for user profile.")
 
     token_user_id = getattr(request.state, "user_token", None)
@@ -33,7 +34,7 @@ def get_requestors_profile(request: Request):
         raise InvalidUserIdException("Token User ID is required.")
 
     # Use the helper directly
-    user_helper = UserProfileHelper()
+    user_helper = UserProfileHelper(request_id=request.state.request_id)
     user_profile_data = user_helper.get_user_profile(user_id=token_user_id)
     if not user_profile_data:
         logger.warning(f"User profile not found for user_id: {token_user_id}")

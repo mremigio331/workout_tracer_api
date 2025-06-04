@@ -16,15 +16,17 @@ class StravaCredentialsHelper:
     Encrypts and decrypts sensitive API info.
     """
 
-    def __init__(self):
+    def __init__(self, request_id: str = None):
         self.dynamodb = boto3.resource("dynamodb", region_name="us-west-2")
         table_name = os.getenv("TABLE_NAME", "WorkoutTracer-UserTable-Staging")
         self.table = self.dynamodb.Table(table_name)
         self.logger = Logger()
+        if request_id:
+            self.logger.append_keys(request_id=request_id)
         self.sk = "STRAVA_CREDENTIALS"
         self.audit_sk = "STRAVA_CREDENTIALS_AUDIT"
         self.strava_profile_helper = StravaProfileHelper()
-        self.audit_action_helper = AuditActionHelper()
+        self.audit_action_helper = AuditActionHelper(request_id=request_id)
         self.kms_key_arn = os.getenv("KMS_KEY_ARN")
         self.kms_client = boto3.client("kms", region_name="us-west-2")
 

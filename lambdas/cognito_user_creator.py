@@ -5,8 +5,6 @@ from dynamodb.helpers.user_profile_helper import UserProfileHelper
 
 logger = Logger(service="WorkoutTracer-Cognito-User-Creator")
 
-user_profile_helper = UserProfileHelper()
-
 
 @logger.inject_lambda_context
 def handler(event: dict, context: LambdaContext) -> dict:
@@ -21,6 +19,7 @@ def handler(event: dict, context: LambdaContext) -> dict:
         name = user_attrs.get("name", "unknown")
 
         try:
+            user_profile_helper = UserProfileHelper(request_id=context.aws_request_id)
             user_profile_helper.create_user_profile(
                 user_id=user_id, email=email, name=name
             )
