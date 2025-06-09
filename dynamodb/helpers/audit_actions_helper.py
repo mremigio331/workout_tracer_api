@@ -5,6 +5,7 @@ from aws_lambda_powertools import Logger
 from botocore.exceptions import ClientError
 import boto3
 import os
+from decimal import Decimal
 
 
 class AuditActions(Enum):
@@ -31,6 +32,25 @@ class AuditActionHelper:
         if request_id:
             self.logger.append_keys(request_id=request_id)
 
+    def to_dict(self, obj):
+        if obj is None:
+            return None
+        if hasattr(obj, "dict"):
+            return obj.dict()
+        if isinstance(obj, dict):
+            return obj
+        return dict(obj)  # fallback, may raise if not dict-like
+
+    def convert_floats_to_decimal(self, obj):
+        if isinstance(obj, dict):
+            return {k: self.convert_floats_to_decimal(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self.convert_floats_to_decimal(v) for v in obj]
+        elif isinstance(obj, float):
+            return Decimal(str(obj))
+        else:
+            return obj
+
     def create_audit_record(
         self, user_id: str, sk: str, action: str, before: Any, after: Any
     ) -> dict:
@@ -41,10 +61,14 @@ class AuditActionHelper:
         """
         pk = f"#USER:{user_id}"
         timestamp = datetime.utcnow().isoformat()
+
+        before_dict = self.convert_floats_to_decimal(self.to_dict(before))
+        after_dict = self.convert_floats_to_decimal(self.to_dict(after))
+
         audit_entry = {
             "action": action,
-            "before": before.dict() if before else None,
-            "after": after.dict() if after else None,
+            "before": before_dict,
+            "after": after_dict,
             "timestamp": timestamp,
         }
 
@@ -76,9 +100,7 @@ class AuditActionHelper:
                     "records": [audit_entry],
                 }
                 self.table.put_item(Item=audit_item)
-                self.logger.info(
-                    f"Created new audit record for {user_id}: {audit_item}"
-                )
+                self.logger.info(f"Created new audit record for {user_id}")
                 return audit_item
         except ClientError as e:
             self.logger.error(f"Error creating audit record for {user_id}: {e}")
