@@ -170,3 +170,33 @@ class StravaClient:
             raise StravaAuthCodeExchangeError(
                 f"Error refreshing Strava access token: {e}"
             )
+
+    def create_push_subscription(self, callback_url, verify_token, access_token=None):
+        """
+        Subscribe to Strava push notifications.
+        See: https://www.strava.com/api/v3/push_subscriptions
+        """
+        url = "https://www.strava.com/api/v3/push_subscriptions"
+        headers = {
+            "Accept": "application/json",
+        }
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
+        data = {
+            "client_id": self.strava_client_id,
+            "client_secret": self.strava_client_secret,
+            "callback_url": callback_url,
+            "verify_token": verify_token,
+        }
+        try:
+            response = requests.post(url, headers=headers, data=data)
+            response.raise_for_status()
+            self.logger.info("Successfully created Strava push subscription.")
+            return response.json()
+        except requests.RequestException as e:
+            self.logger.error(f"Error creating Strava push subscription: {e}")
+            if hasattr(e, "response") and e.response is not None:
+                self.logger.error(f"Response: {e.response.text}")
+            raise StravaAuthCodeExchangeError(
+                f"Error creating Strava push subscription: {e}"
+            )

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 class StravaMapModel(BaseModel):
     id: Optional[str]
     summary_polyline: Optional[str]
+    polyline: Optional[str]
     resource_state: Optional[int]
 
 
@@ -93,10 +94,11 @@ class PhotoUrlModel(BaseModel):
 
 
 class PhotoPrimaryModel(BaseModel):
-    id: Optional[int]
+    id: Optional[int] = None  # Make id optional with default None
     unique_id: Optional[str]
     urls: Optional[Dict[str, str]]
     source: Optional[int]
+    media_type: Optional[int]
 
 
 class PhotosModel(BaseModel):
@@ -184,3 +186,8 @@ class StravaWorkoutModel(BaseModel):
     segment_leaderboard_opt_out: Optional[bool] = None
     leaderboard_opt_out: Optional[bool] = None
     description: Optional[str] = None
+    splits_standard: Optional[List[Dict[str, Any]]] = None
+    perceived_exertion: Optional[Any] = None
+    prefer_perceived_exertion: Optional[Any] = None
+    stats_visibility: Optional[List[Dict[str, Any]]] = None
+    available_zones: Optional[List[str]] = None
