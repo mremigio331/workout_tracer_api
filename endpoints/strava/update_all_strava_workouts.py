@@ -20,12 +20,12 @@ router = APIRouter()
 
 
 @router.post(
-    "/strava/update_workout/{activity_id}",
+    "/strava/batch_update_workout",
     summary="Update a starva workout",
     response_description="Updated Strava workout info",
 )
 @exceptions_decorator
-def update_workout(activity_id: int, request: Request = None):
+def update_all_strava_workouts(request: Request = None):
     user_id = getattr(request.state, "user_token", None)
     if not user_id:
         logger.warning("User ID not found in request state.")
@@ -78,19 +78,7 @@ def update_workout(activity_id: int, request: Request = None):
 
     strava_workout_helper = StravaWorkoutHelper(request_id=request.state.request_id)
     strava_client = StravaClient(request_id=request.state.request_id)
-    logger.info(
-        f"Attempting to update Strava workout with ID {activity_id} for user {user_id}."
-    )
 
-    workout_data = strava_client.get_full_activity_by_id(
-        activity_id=activity_id, access_token=strava_credentials["access_token"]
-    )
-    if not workout_data:
-        logger.error(f"Failed to retrieve workout data for ID {activity_id}.")
-        return JSONResponse(
-            content={"error": "Failed to retrieve workout data."}, status_code=404
-        )
-    logger.info(f"Successfully retrieved workout data for ID {activity_id}.")
     workout_helper = StravaWorkoutHelper(request_id=request.state.request_id)
 
     try:
@@ -98,17 +86,34 @@ def update_workout(activity_id: int, request: Request = None):
         update_count = 0
         error_count = 0
 
-        try:
-            _, action = workout_helper.put_strava_workout(
-                user_id=user_id, workout_data=workout_data
-            )
-            if action == "create":
-                create_count += 1
-            elif action == "update":
-                update_count += 1
-        except Exception as e:
-            error_count += 1
-            logger.error(f"Failed to store activity for user_id {user_id}: {e}")
+        for activity in activity_ids.activity_ids:
+            try:
+                logger.info(
+                    f"Attempting to update Strava workout with ID {activity} for user {user_id}."
+                )
+                workout_data = strava_client.get_full_activity_by_id(
+                    activity_id=activity,
+                    access_token=strava_credentials["access_token"],
+                )
+                if not workout_data:
+                    logger.error(f"Failed to retrieve workout data for ID {activity}.")
+                    return JSONResponse(
+                        content={"error": "Failed to retrieve workout data."},
+                        status_code=404,
+                    )
+                logger.info(f"Successfully retrieved workout data for ID {activity}.")
+
+                _, action = workout_helper.put_strava_workout(
+                    user_id=user_id, workout_data=workout_data
+                )
+                if action == "create":
+                    create_count += 1
+                elif action == "update":
+                    update_count += 1
+            except Exception as e:
+                error_count += 1
+                logger.error(workout_data)
+                logger.error(f"Failed to store activity for user_id {user_id}: {e}")
 
         return JSONResponse(
             content={

@@ -48,9 +48,9 @@ class SegmentEffortModel(BaseModel):
     distance: Optional[float]
     start_index: Optional[int]
     end_index: Optional[int]
-    average_cadence: Optional[float]
+    average_cadence: Optional[float] = None
     device_watts: Optional[bool]
-    average_watts: Optional[float]
+    average_watts: Optional[float] = None
     segment: Optional[SegmentModel]
     kom_rank: Optional[int]
     pr_rank: Optional[int]
@@ -74,9 +74,9 @@ class LapModel(BaseModel):
     total_elevation_gain: Optional[float]
     average_speed: Optional[float]
     max_speed: Optional[float]
-    average_cadence: Optional[float]
+    average_cadence: Optional[float] = None
     device_watts: Optional[bool]
-    average_watts: Optional[float]
+    average_watts: Optional[float] = None
     lap_index: Optional[int]
     split: Optional[int]
 
@@ -94,7 +94,7 @@ class PhotoUrlModel(BaseModel):
 
 
 class PhotoPrimaryModel(BaseModel):
-    id: Optional[int] = None  # Make id optional with default None
+    id: Optional[int] = None
     unique_id: Optional[str]
     urls: Optional[Dict[str, str]]
     source: Optional[int]
@@ -103,7 +103,7 @@ class PhotoPrimaryModel(BaseModel):
 
 class PhotosModel(BaseModel):
     primary: Optional[PhotoPrimaryModel]
-    use_primary_photo: Optional[bool]
+    use_primary_photo: Optional[bool] = None
     count: Optional[int]
 
 
