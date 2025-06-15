@@ -7,6 +7,7 @@ from endpoints.strava import (
     identify_strava_workouts,
     update_strava_workout,
     batch_update_strava_workout,
+    get_strava_workouts,
 )
 
 
@@ -33,6 +34,9 @@ def get_all_routes(app):
     app.include_router(update_strava_workout.router, prefix="/strava", tags=["Strava"])
     app.include_router(
         batch_update_strava_workout.router, prefix="/strava", tags=["Strava"]
+    )
+    app.include_router(
+        get_strava_workouts.router, prefix="/strava", tags=["Strava"]
     )
 
     return app

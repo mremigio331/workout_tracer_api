@@ -100,6 +100,80 @@ class StravaWorkoutHelper:
                 f"Unexpected error in get_strava_workout for user_id: {user_id}: {e}"
             )
             return None
+        
+    def get_all_workout_ids(self, user_id: str) -> List[int]:
+        """
+        Retrieve all Strava workout IDs for a user.
+        Returns a list of workout IDs.
+        """
+        try:
+            response = self.table.query(
+                KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(f"#USER:{user_id}")
+                & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk)
+            )
+            items = response.get("Items", [])
+            return [int(item["SK"].split("#")[-1]) for item in items if "SK" in item]
+        except ClientError as e:
+            self.logger.error(
+                f"Error retrieving all Strava workout IDs for user_id {user_id}: {e}"
+            )
+            return []
+        except Exception as e:
+            self.logger.error(
+                f"Unexpected error in get_all_workout_ids for user_id: {user_id}: {e}"
+            )
+            return []
+    
+    def get_all_workouts(self, user_id: str) -> List[Dict[str, Any]]:
+        """
+        Retrieve all Strava workouts for a user.
+        Returns a list of workout dicts.
+        """
+        try:
+            response = self.table.query(
+                KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(f"#USER:{user_id}")
+                & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk)
+            )
+            items = response.get("Items", [])
+            workouts = [self._decimals_to_floats(item) for item in items]
+            return workouts
+        except ClientError as e:
+            self.logger.error(
+                f"Error retrieving all Strava workouts for user_id {user_id}: {e}"
+            )
+            return []
+        except Exception as e:
+            self.logger.error(
+                f"Unexpected error in get_all_workouts for user_id: {user_id}: {e}"
+            )
+            return []
+    
+    def delete_strava_workout(self, user_id: str, workout_id: int) -> bool:
+        """
+        Delete a Strava workout from DynamoDB.
+        Returns True if deletion was successful, False otherwise.
+        """
+        sk = f"{self.sk}#{workout_id}"
+        try:
+            response = self.table.delete_item(
+                Key={"PK": f"#USER:{user_id}", "SK": sk},
+                ReturnValues="ALL_OLD"
+            )
+            if "Attributes" in response:
+                self.logger.info(
+                    f"Successfully deleted Strava workout {workout_id} for user_id {user_id}"
+                )
+                return True
+            else:
+                self.logger.warning(
+                    f"No Strava workout found for user_id: {user_id}, workout_id: {workout_id}"
+                )
+                return False
+        except ClientError as e:
+            self.logger.error(
+                f"Error deleting Strava workout for user_id {user_id}, workout_id {workout_id}: {e}"
+            )
+            return False
 
     @staticmethod
     def convert_floats_to_decimal(obj):

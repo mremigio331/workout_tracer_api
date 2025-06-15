@@ -80,13 +80,19 @@ def update_all_strava_workouts(request: Request = None):
     strava_client = StravaClient(request_id=request.state.request_id)
 
     workout_helper = StravaWorkoutHelper(request_id=request.state.request_id)
+    workout_ids = workout_helper.get_all_workout_ids(user_id=user_id)
+    if not workout_ids:
+        logger.warning(f"No Strava workouts found for user_id: {user_id}")
+        return JSONResponse(
+            content={"error": "No Strava workouts found."}, status_code=404
+        )
 
     try:
         create_count = 0
         update_count = 0
         error_count = 0
 
-        for activity in activity_ids.activity_ids:
+        for activity in workout_ids:
             try:
                 logger.info(
                     f"Attempting to update Strava workout with ID {activity} for user {user_id}."

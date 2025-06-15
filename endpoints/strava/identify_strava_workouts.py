@@ -231,6 +231,7 @@ def grab_all_workouts(request: Request, grab_all_workouts: GrabAllWorkouts):
             except Exception as e:
                 error_count += 1
                 logger.error(f"Failed to store activity for user_id {user_id}: {e}")
+                logger.error(activity)
 
         return JSONResponse(
             content={

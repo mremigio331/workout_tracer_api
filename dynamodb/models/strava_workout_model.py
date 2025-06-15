@@ -3,10 +3,10 @@ from pydantic import BaseModel, Field
 
 
 class StravaMapModel(BaseModel):
-    id: Optional[str]
-    summary_polyline: Optional[str]
-    polyline: Optional[str]
-    resource_state: Optional[int]
+    id: Optional[str] = None
+    summary_polyline: Optional[str] = None
+    polyline: Optional[str] = None
+    resource_state: Optional[int] = None
 
 
 class StravaAthleteModel(BaseModel):
@@ -102,16 +102,16 @@ class PhotoPrimaryModel(BaseModel):
 
 
 class PhotosModel(BaseModel):
-    primary: Optional[PhotoPrimaryModel]
+    primary: Optional[PhotoPrimaryModel] = None
     use_primary_photo: Optional[bool] = None
-    count: Optional[int]
+    count: Optional[int] = None
 
 
 class HighlightedKudoserModel(BaseModel):
-    destination_url: Optional[str]
-    display_name: Optional[str]
-    avatar_url: Optional[str]
-    show_name: Optional[bool]
+    destination_url: Optional[str] = None
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    show_name: Optional[bool] = None
 
 
 class StravaWorkoutModel(BaseModel):
@@ -125,7 +125,7 @@ class StravaWorkoutModel(BaseModel):
     type: Optional[str] = None
     sport_type: Optional[str] = None
     workout_type: Optional[int] = None
-    id: Optional[int] = None
+    id: Optional[int]
     start_date: Optional[str] = None
     start_date_local: Optional[str] = None
     timezone: Optional[str] = None
