@@ -1,7 +1,7 @@
 aws_lambda_powertools
 boto3
 botocore
-cryptography
+cryptography<42
 datetime
 fastapi
 httpx
