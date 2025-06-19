@@ -4,6 +4,7 @@ from starlette.requests import Request
 from urllib.parse import urlencode, urlparse, parse_qs
 import os
 import httpx
+import logging
 
 COGNITO_DOMAIN = os.getenv("COGNITO_DOMAIN", "")
 COGNITO_CLIENT_ID = os.getenv("COGNITO_CLIENT_ID", "")
@@ -18,14 +19,23 @@ COGNITO_AUTH_URL = f"{COGNITO_DOMAIN}/login?" + urlencode(
     }
 )
 
+logger = logging.getLogger("cognito_auth_middleware")
+logger.setLevel(logging.INFO)
+
 
 class CognitoAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        logger.append_keys(
+            request_id=request.state.request_id,
+        )
+        logger.info(f"Request path: {request.url.path} | Query: {request.url.query}")
         # Only apply to /docs and root (for redirect)
         if request.url.path in ["/docs", "/"]:
             id_token = request.cookies.get("id_token")
             code = request.query_params.get("code")
+            logger.info(f"id_token in cookies: {bool(id_token)} | code in query: {code}")
             if not id_token and code:
+                logger.info("No id_token, but code present. Attempting token exchange.")
                 # Exchange code for tokens
                 async with httpx.AsyncClient() as client:
                     token_resp = await client.post(
@@ -38,15 +48,23 @@ class CognitoAuthMiddleware(BaseHTTPMiddleware):
                         },
                         headers={"Content-Type": "application/x-www-form-urlencoded"},
                     )
+                logger.info(f"Token exchange response status: {token_resp.status_code}")
                 if token_resp.status_code == 200:
                     tokens = token_resp.json()
                     id_token = tokens.get("id_token")
+                    logger.info(f"Token exchange success. id_token present: {bool(id_token)}")
                     if id_token:
                         response = RedirectResponse(url="/docs")
                         response.set_cookie("id_token", id_token, httponly=True)
                         return response
+                else:
+                    logger.error(f"Token exchange failed: {token_resp.text}")
                 # If token exchange fails, redirect to Cognito login
+                logger.info("Redirecting to Cognito login (token exchange failed).")
                 return RedirectResponse(COGNITO_AUTH_URL)
             if request.url.path == "/docs" and not id_token:
+                logger.info("No id_token for /docs, redirecting to Cognito login.")
                 return RedirectResponse(COGNITO_AUTH_URL)
-        return await call_next(request)
+        response = await call_next(request)
+        logger.info(f"Response status for {request.url.path}: {getattr(response, 'status_code', 'unknown')}")
+        return response
