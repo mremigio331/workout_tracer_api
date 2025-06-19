@@ -33,6 +33,7 @@ class UserProfileHelper:
             email=email,
             name=name,
             created_at=datetime.utcnow().isoformat(),  # always a string
+            # cached_map_location will default to Manhattan if not provided
         )
         item = profile.dict()
         item["PK"] = f"#USER:{user_id}"
@@ -77,6 +78,9 @@ class UserProfileHelper:
                     "public_profile": item.get("public_profile"),
                     "created_at": item.get("created_at"),
                     "beta_features": item.get("beta_features", []),
+                    "cached_map_location": item.get(
+                        "cached_map_location", (40.7831, -73.9712)
+                    ),
                 }
                 return result
             else:
@@ -93,9 +97,10 @@ class UserProfileHelper:
         email: str = None,
         public_profile: bool = None,
         beta_features: bool = None,
+        cached_map_location: tuple = None,
     ):
         """
-        Update only the provided fields (name, email, public_profile) of the user profile.
+        Update only the provided fields (name, email, public_profile, beta_features, cached_map_location) of the user profile.
         Only fields that are not None will be updated.
         """
         # Use locals() to build updated_changes dict

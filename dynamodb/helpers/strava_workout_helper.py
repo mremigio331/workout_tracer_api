@@ -100,7 +100,7 @@ class StravaWorkoutHelper:
                 f"Unexpected error in get_strava_workout for user_id: {user_id}: {e}"
             )
             return None
-        
+
     def get_all_workout_ids(self, user_id: str) -> List[int]:
         """
         Retrieve all Strava workout IDs for a user.
@@ -108,7 +108,9 @@ class StravaWorkoutHelper:
         """
         try:
             response = self.table.query(
-                KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(f"#USER:{user_id}")
+                KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(
+                    f"#USER:{user_id}"
+                )
                 & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk)
             )
             items = response.get("Items", [])
@@ -123,7 +125,7 @@ class StravaWorkoutHelper:
                 f"Unexpected error in get_all_workout_ids for user_id: {user_id}: {e}"
             )
             return []
-    
+
     def get_all_workouts(self, user_id: str) -> List[Dict[str, Any]]:
         """
         Retrieve all Strava workouts for a user.
@@ -131,7 +133,9 @@ class StravaWorkoutHelper:
         """
         try:
             response = self.table.query(
-                KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(f"#USER:{user_id}")
+                KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(
+                    f"#USER:{user_id}"
+                )
                 & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk)
             )
             items = response.get("Items", [])
@@ -147,7 +151,7 @@ class StravaWorkoutHelper:
                 f"Unexpected error in get_all_workouts for user_id: {user_id}: {e}"
             )
             return []
-    
+
     def delete_strava_workout(self, user_id: str, workout_id: int) -> bool:
         """
         Delete a Strava workout from DynamoDB.
@@ -156,8 +160,7 @@ class StravaWorkoutHelper:
         sk = f"{self.sk}#{workout_id}"
         try:
             response = self.table.delete_item(
-                Key={"PK": f"#USER:{user_id}", "SK": sk},
-                ReturnValues="ALL_OLD"
+                Key={"PK": f"#USER:{user_id}", "SK": sk}, ReturnValues="ALL_OLD"
             )
             if "Attributes" in response:
                 self.logger.info(

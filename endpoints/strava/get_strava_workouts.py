@@ -8,6 +8,7 @@ import base64
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
 
+
 @router.get(
     "/workouts",
     summary="Get all workouts with pagination",
@@ -16,11 +17,15 @@ router = APIRouter()
 @exceptions_decorator
 def get_strava_workouts(
     request: Request,
-    limit: int = Query(50, ge=1, le=100, description="Number of workouts to return (max 100)"),
+    limit: int = Query(
+        500, ge=1, le=500, description="Number of workouts to return (max 500)"
+    ),
     next_token: str = Query(None, description="Token for fetching the next page"),
 ):
     user_id = getattr(request.state, "user_token", None)
-    logger.info(f"Received request for workouts: user_id={user_id}, limit={limit}, next_token={next_token}")
+    logger.info(
+        f"Received request for workouts: user_id={user_id}, limit={limit}, next_token={next_token}"
+    )
     if not user_id:
         logger.warning("User ID not found in request state.")
         return JSONResponse(
@@ -43,13 +48,17 @@ def get_strava_workouts(
     total = len(all_workouts)
     logger.info(f"Total workouts found for user_id={user_id}: {total}")
     paginated = all_workouts[offset : offset + limit]
-    logger.info(f"Returning workouts {offset} to {offset + len(paginated)} for user_id={user_id}")
+    logger.info(
+        f"Returning workouts {offset} to {offset + len(paginated)} for user_id={user_id}"
+    )
 
     # Prepare next_token if there are more results
     if offset + limit < total:
         new_next_token = base64.urlsafe_b64encode(str(offset + limit).encode()).decode()
+        logger.info(f"Next query: /workouts?limit={limit}&next_token={new_next_token}")
     else:
         new_next_token = None
+        logger.info("No new token, this is the last page.")
 
     return JSONResponse(
         content={

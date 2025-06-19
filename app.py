@@ -26,11 +26,8 @@ if stage == "prod":
 else:
     allowed_origins = ["*"]
 
-if stage in ("dev", "staging"):
-    logger.info(f"Running in {stage} mode, allowing all origins for CORS.")
-    app.add_middleware(CognitoAuthMiddleware)
-    inject_user_token()
-    logger.info("Dev token injection enabled.")
+app.add_middleware(CognitoAuthMiddleware)
+inject_user_token()
 
 
 app.add_middleware(RequestIdMiddleware)

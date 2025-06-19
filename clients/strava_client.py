@@ -11,7 +11,9 @@ import datetime
 import os
 
 stage = os.getenv("STAGE", "dev")
-metrics = Metrics(namespace=f"WorkoutTracer-{stage.upper()}", service="workout_tracer_api")
+metrics = Metrics(
+    namespace=f"WorkoutTracer-{stage.upper()}", service="workout_tracer_api"
+)
 
 
 class StravaAuthCodeExchangeError(Exception):
@@ -110,7 +112,9 @@ class StravaClient:
                         f"Request failed (page {page}): {response.status_code}"
                     )
                     self.logger.error(response.text)
-                    metrics.add_metric(name="StravaException", unit=MetricUnit.Count, value=1)
+                    metrics.add_metric(
+                        name="StravaException", unit=MetricUnit.Count, value=1
+                    )
                     break
 
                 data = response.json()
@@ -127,7 +131,9 @@ class StravaClient:
 
                 metrics.add_metric(name="StravaSuccess", unit=MetricUnit.Count, value=1)
             except requests.RequestException as e:
-                metrics.add_metric(name="StravaException", unit=MetricUnit.Count, value=1)
+                metrics.add_metric(
+                    name="StravaException", unit=MetricUnit.Count, value=1
+                )
                 self.logger.error(f"Error fetching athlete activities: {e}")
                 raise StravaAuthCodeExchangeError(
                     f"Error fetching athlete activities: {e}"
@@ -150,13 +156,19 @@ class StravaClient:
                 metrics.add_metric(name="StravaSuccess", unit=MetricUnit.Count, value=1)
                 return response.json()
             elif response.status_code == 404:
-                metrics.add_metric(name="StravaNotFound", unit=MetricUnit.Count, value=1)
+                metrics.add_metric(
+                    name="StravaNotFound", unit=MetricUnit.Count, value=1
+                )
                 self.logger.error(f"Activity with ID {activity_id} not found.")
             elif response.status_code == 401:
-                metrics.add_metric(name="StravaUnauthorized", unit=MetricUnit.Count, value=1)
+                metrics.add_metric(
+                    name="StravaUnauthorized", unit=MetricUnit.Count, value=1
+                )
                 self.logger.error("Unauthorized. Check your access token.")
             else:
-                metrics.add_metric(name="StravaException", unit=MetricUnit.Count, value=1)
+                metrics.add_metric(
+                    name="StravaException", unit=MetricUnit.Count, value=1
+                )
                 self.logger.error(
                     f"Failed to retrieve activity. Status: {response.status_code}"
                 )
@@ -189,9 +201,11 @@ class StravaClient:
             tokens = response.json()
             self.logger.info("Successfully refreshed Strava access token.")
             metrics.add_metric(name="StravaSuccess", unit=MetricUnit.Count, value=1)
+
             return tokens
         except requests.RequestException as e:
             metrics.add_metric(name="StravaException", unit=MetricUnit.Count, value=1)
+
             self.logger.error(f"Error refreshing Strava access token: {e}")
             raise StravaAuthCodeExchangeError(
                 f"Error refreshing Strava access token: {e}"
@@ -221,9 +235,11 @@ class StravaClient:
             response.raise_for_status()
             self.logger.info("Successfully created Strava push subscription.")
             metrics.add_metric(name="StravaSuccess", unit=MetricUnit.Count, value=1)
+
             return response.json()
         except requests.RequestException as e:
             metrics.add_metric(name="StravaException", unit=MetricUnit.Count, value=1)
+
             self.logger.error(f"Error creating Strava push subscription: {e}")
             if hasattr(e, "response") and e.response is not None:
                 self.logger.error(f"Response: {e.response.text}")

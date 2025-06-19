@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Body
+from fastapi import APIRouter, Request, Query
 from fastapi.responses import JSONResponse
 from aws_lambda_powertools import Logger
 from decorators.exceptions_decorator import exceptions_decorator
@@ -14,24 +14,44 @@ import os
 import decimal
 from dynamodb.helpers.strava_workout_helper import StravaWorkoutHelper
 import pytz
+import base64
 
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
 
 
 @router.post(
-    "/strava/batch_update_workout",
-    summary="Update a starva workout",
+    "/strava/update_all_workouts",
+    summary="Update Strava workouts in batches with pagination token",
     response_description="Updated Strava workout info",
 )
 @exceptions_decorator
-def update_all_strava_workouts(request: Request = None):
+def update_all_strava_workouts(
+    request: Request,
+    limit: int = Query(
+        50, ge=1, le=50, description="Number of workouts to update per batch (max 50)"
+    ),
+    next_token: str = Query(None, description="Token for fetching the next batch"),
+):
     user_id = getattr(request.state, "user_token", None)
+    logger.info(
+        f"Received batch update request: user_id={user_id}, limit={limit}, next_token={next_token}"
+    )
     if not user_id:
         logger.warning("User ID not found in request state.")
         return JSONResponse(
             content={"error": "User ID not found in request."}, status_code=400
         )
+
+    # Decode next_token to get offset
+    if next_token:
+        try:
+            offset = int(base64.urlsafe_b64decode(next_token.encode()).decode())
+        except Exception:
+            logger.warning("Invalid next_token provided, defaulting to offset=0")
+            offset = 0
+    else:
+        offset = 0
 
     credentials_helper = StravaCredentialsHelper(request_id=request.state.request_id)
     strava_credentials = credentials_helper.get_credentials(user_id=user_id)
@@ -76,23 +96,29 @@ def update_all_strava_workouts(request: Request = None):
 
     logger.info(f"Fetching Strava workouts for user_id: {user_id}")
 
-    strava_workout_helper = StravaWorkoutHelper(request_id=request.state.request_id)
-    strava_client = StravaClient(request_id=request.state.request_id)
-
     workout_helper = StravaWorkoutHelper(request_id=request.state.request_id)
     workout_ids = workout_helper.get_all_workout_ids(user_id=user_id)
-    if not workout_ids:
-        logger.warning(f"No Strava workouts found for user_id: {user_id}")
-        return JSONResponse(
-            content={"error": "No Strava workouts found."}, status_code=404
+    total = len(workout_ids)
+    logger.info(f"Total workouts found for user_id={user_id}: {total}")
+
+    # Pagination: process up to `limit` workouts per call
+    batch_ids = workout_ids[offset : offset + limit]
+    next_offset = offset + limit
+    if next_offset < total:
+        new_next_token = base64.urlsafe_b64encode(str(next_offset).encode()).decode()
+        logger.info(
+            f"Next query: /strava/batch_update_workout?limit={limit}&next_token={new_next_token}"
         )
+    else:
+        new_next_token = None
+        logger.info("No new token, this is the last batch.")
 
     try:
         create_count = 0
         update_count = 0
         error_count = 0
 
-        for activity in workout_ids:
+        for activity in batch_ids:
             try:
                 logger.info(
                     f"Attempting to update Strava workout with ID {activity} for user {user_id}."
@@ -103,10 +129,8 @@ def update_all_strava_workouts(request: Request = None):
                 )
                 if not workout_data:
                     logger.error(f"Failed to retrieve workout data for ID {activity}.")
-                    return JSONResponse(
-                        content={"error": "Failed to retrieve workout data."},
-                        status_code=404,
-                    )
+                    error_count += 1
+                    continue
                 logger.info(f"Successfully retrieved workout data for ID {activity}.")
 
                 _, action = workout_helper.put_strava_workout(
@@ -118,15 +142,19 @@ def update_all_strava_workouts(request: Request = None):
                     update_count += 1
             except Exception as e:
                 error_count += 1
-                logger.error(workout_data)
                 logger.error(f"Failed to store activity for user_id {user_id}: {e}")
 
+        response_content = {
+            "created": create_count,
+            "updated": update_count,
+            "error_count": error_count,
+            "next_token": new_next_token,
+            "total_workouts": total,
+            "limit": limit,
+            "offset": offset,
+        }
         return JSONResponse(
-            content={
-                "created": create_count,
-                "updated": update_count,
-                "error_count": error_count,
-            },
+            content=response_content,
             status_code=200,
         )
     except requests.RequestException as e:
