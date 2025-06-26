@@ -26,11 +26,10 @@ if stage == "prod":
 else:
     allowed_origins = ["*"]
 
+app.add_middleware(RequestIdMiddleware)
 app.add_middleware(CognitoAuthMiddleware)
 inject_user_token()
 
-
-app.add_middleware(RequestIdMiddleware)
 app.add_middleware(JWTMiddleware)
 app.add_middleware(
     CORSMiddleware,

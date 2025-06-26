@@ -15,6 +15,8 @@ import decimal
 from dynamodb.helpers.strava_workout_helper import StravaWorkoutHelper
 import pytz
 import base64
+import boto3
+import json
 
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
@@ -22,36 +24,18 @@ router = APIRouter()
 
 @router.post(
     "/strava/update_all_workouts",
-    summary="Update Strava workouts in batches with pagination token",
-    response_description="Updated Strava workout info",
+    summary="Publish all Strava workouts to SQS",
+    response_description="Published Strava workout info",
 )
 @exceptions_decorator
-def update_all_strava_workouts(
-    request: Request,
-    limit: int = Query(
-        50, ge=1, le=50, description="Number of workouts to update per batch (max 50)"
-    ),
-    next_token: str = Query(None, description="Token for fetching the next batch"),
-):
+def update_all_strava_workouts(request: Request):
     user_id = getattr(request.state, "user_token", None)
-    logger.info(
-        f"Received batch update request: user_id={user_id}, limit={limit}, next_token={next_token}"
-    )
+    logger.info(f"Received batch update request: user_id={user_id}")
     if not user_id:
         logger.warning("User ID not found in request state.")
         return JSONResponse(
             content={"error": "User ID not found in request."}, status_code=400
         )
-
-    # Decode next_token to get offset
-    if next_token:
-        try:
-            offset = int(base64.urlsafe_b64decode(next_token.encode()).decode())
-        except Exception:
-            logger.warning("Invalid next_token provided, defaulting to offset=0")
-            offset = 0
-    else:
-        offset = 0
 
     credentials_helper = StravaCredentialsHelper(request_id=request.state.request_id)
     strava_credentials = credentials_helper.get_credentials(user_id=user_id)
@@ -101,64 +85,48 @@ def update_all_strava_workouts(
     total = len(workout_ids)
     logger.info(f"Total workouts found for user_id={user_id}: {total}")
 
-    # Pagination: process up to `limit` workouts per call
-    batch_ids = workout_ids[offset : offset + limit]
-    next_offset = offset + limit
-    if next_offset < total:
-        new_next_token = base64.urlsafe_b64encode(str(next_offset).encode()).decode()
-        logger.info(
-            f"Next query: /strava/batch_update_workout?limit={limit}&next_token={new_next_token}"
+    # Publish all workout_ids to SQS
+    sqs_queue_url = os.getenv("SQS_QUEUE_URL")
+    if not sqs_queue_url:
+        logger.error("SQS_QUEUE_URL environment variable not set.")
+        return JSONResponse(
+            content={"error": "SQS queue URL not configured."}, status_code=500
         )
-    else:
-        new_next_token = None
-        logger.info("No new token, this is the last batch.")
 
-    try:
-        create_count = 0
-        update_count = 0
-        error_count = 0
+    sqs_client = boto3.client("sqs")
+    published_count = 0
+    error_count = 0
+    request_time = datetime.now(pytz.UTC).isoformat()
 
-        for activity in batch_ids:
-            try:
-                logger.info(
-                    f"Attempting to update Strava workout with ID {activity} for user {user_id}."
-                )
-                workout_data = strava_client.get_full_activity_by_id(
-                    activity_id=activity,
-                    access_token=strava_credentials["access_token"],
-                )
-                if not workout_data:
-                    logger.error(f"Failed to retrieve workout data for ID {activity}.")
-                    error_count += 1
-                    continue
-                logger.info(f"Successfully retrieved workout data for ID {activity}.")
-
-                _, action = workout_helper.put_strava_workout(
-                    user_id=user_id, workout_data=workout_data
-                )
-                if action == "create":
-                    create_count += 1
-                elif action == "update":
-                    update_count += 1
-            except Exception as e:
-                error_count += 1
-                logger.error(f"Failed to store activity for user_id {user_id}: {e}")
-
-        response_content = {
-            "created": create_count,
-            "updated": update_count,
-            "error_count": error_count,
-            "next_token": new_next_token,
-            "total_workouts": total,
-            "limit": limit,
-            "offset": offset,
+    for workout_id in workout_ids:
+        message = {
+            "request_time": request_time,
+            "user_id": user_id,
+            "workout_id": workout_id,
         }
-        return JSONResponse(
-            content=response_content,
-            status_code=200,
-        )
-    except requests.RequestException as e:
-        logger.error(f"Error fetching Strava activities: {e}")
-        return JSONResponse(
-            content={"error": "Error fetching Strava activities."}, status_code=500
-        )
+        try:
+            sqs_client.send_message(
+                QueueUrl=sqs_queue_url, MessageBody=json.dumps(message)
+            )
+            published_count += 1
+            logger.info(f"Published workout_id {workout_id} to SQS.")
+        except Exception as e:
+            error_count += 1
+            logger.error(f"Failed to publish workout_id {workout_id} to SQS: {e}")
+
+    response_content = {
+        "published": published_count,
+        "error_count": error_count,
+        "identified_workout_ids": len(workout_ids),
+        "total_workouts": total,
+    }
+
+    # If you use StravaClient in this endpoint, flush its metrics here.
+    # Example:
+    # if strava_client:
+    #     strava_client.metrics.flush_metrics()
+
+    return JSONResponse(
+        content=response_content,
+        status_code=200,
+    )

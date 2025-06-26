@@ -22,18 +22,22 @@ COGNITO_AUTH_URL = f"{COGNITO_DOMAIN}/login?" + urlencode(
 logger = logging.getLogger("cognito_auth_middleware")
 logger.setLevel(logging.INFO)
 
+logger.info(f"COGNITO_DOMAIN: {COGNITO_DOMAIN}")
+logger.info(f"COGNITO_CLIENT_ID: {COGNITO_CLIENT_ID}")
+logger.info(f"COGNITO_API_REDIRECT_URI: {COGNITO_API_REDIRECT_URI}")
+logger.info(f"COGNITO_AUTH_URL: {COGNITO_AUTH_URL}")
+
 
 class CognitoAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        logger.append_keys(
-            request_id=request.state.request_id,
-        )
         logger.info(f"Request path: {request.url.path} | Query: {request.url.query}")
         # Only apply to /docs and root (for redirect)
         if request.url.path in ["/docs", "/"]:
             id_token = request.cookies.get("id_token")
             code = request.query_params.get("code")
-            logger.info(f"id_token in cookies: {bool(id_token)} | code in query: {code}")
+            logger.info(
+                f"id_token in cookies: {bool(id_token)} | code in query: {code}"
+            )
             if not id_token and code:
                 logger.info("No id_token, but code present. Attempting token exchange.")
                 # Exchange code for tokens
@@ -52,7 +56,9 @@ class CognitoAuthMiddleware(BaseHTTPMiddleware):
                 if token_resp.status_code == 200:
                     tokens = token_resp.json()
                     id_token = tokens.get("id_token")
-                    logger.info(f"Token exchange success. id_token present: {bool(id_token)}")
+                    logger.info(
+                        f"Token exchange success. id_token present: {bool(id_token)}"
+                    )
                     if id_token:
                         response = RedirectResponse(url="/docs")
                         response.set_cookie("id_token", id_token, httponly=True)
@@ -66,5 +72,7 @@ class CognitoAuthMiddleware(BaseHTTPMiddleware):
                 logger.info("No id_token for /docs, redirecting to Cognito login.")
                 return RedirectResponse(COGNITO_AUTH_URL)
         response = await call_next(request)
-        logger.info(f"Response status for {request.url.path}: {getattr(response, 'status_code', 'unknown')}")
+        logger.info(
+            f"Response status for {request.url.path}: {getattr(response, 'status_code', 'unknown')}"
+        )
         return response

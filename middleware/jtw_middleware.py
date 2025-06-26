@@ -8,9 +8,6 @@ logger = Logger(service="workout-tracer-api")
 
 class JWTMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        logger.append_keys(
-            request_id=request.state.request_id,
-        )
         logger.info(f"JWTMiddleware: Path={request.url.path} Method={request.method}")
         auth_header = request.headers.get("authorization")
         token_user_id = None
@@ -38,5 +35,7 @@ class JWTMiddleware(BaseHTTPMiddleware):
                 )
         request.state.user_token = token_user_id
         response = await call_next(request)
-        logger.info(f"Response status for {request.url.path}: {getattr(response, 'status_code', 'unknown')}")
+        logger.info(
+            f"Response status for {request.url.path}: {getattr(response, 'status_code', 'unknown')}"
+        )
         return response

@@ -131,6 +131,9 @@ def batch_update_workout(
                 logger.error(workout_data)
                 logger.error(f"Failed to store activity for user_id {user_id}: {e}")
 
+        # Flush metrics after processing all activities
+        strava_client.metrics.flush_metrics()
+
         return JSONResponse(
             content={
                 "created": create_count,
@@ -141,6 +144,8 @@ def batch_update_workout(
         )
     except requests.RequestException as e:
         logger.error(f"Error fetching Strava activities: {e}")
+        # Also flush metrics on error
+        strava_client.metrics.flush_metrics()
         return JSONResponse(
             content={"error": "Error fetching Strava activities."}, status_code=500
         )
