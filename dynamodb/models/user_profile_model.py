@@ -11,4 +11,3 @@ class UserProfileModel(BaseModel):
     created_at: str
     public_profile: bool = False
     beta_featues: bool = False
-    cached_map_location: tuple[float, float] = (40.7831, -73.9712)

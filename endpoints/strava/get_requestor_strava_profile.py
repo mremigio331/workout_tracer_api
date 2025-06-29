@@ -23,7 +23,6 @@ def get_requestor_strava_profile(request: Request):
     user_id = getattr(request.state, "user_token", None)
     if not user_id:
         logger.warning("User ID not found in request state.")
-        # No metrics to flush here, just return
         return JSONResponse(
             content={"error": "User ID not found in request."}, status_code=400
         )
@@ -34,10 +33,8 @@ def get_requestor_strava_profile(request: Request):
 
     if not strava_profile:
         logger.warning(f"Strava profile not found for user_id: {user_id}")
-        # No metrics to flush here, just return
         return JSONResponse(
             content={"error": "Strava profile not found."}, status_code=404
         )
     logger.info(f"Successfully retrieved Strava profile for user_id: {user_id}")
-    # No metrics to flush here, just return
     return JSONResponse(content={"athlete": strava_profile}, status_code=200)
