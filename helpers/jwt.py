@@ -23,29 +23,20 @@ def decode_jwt(token: str) -> dict:
         # Pad base64 if needed
         padding = "=" * (-len(payload) % 4)
         decoded = base64.urlsafe_b64decode(payload + padding)
-        return json.loads(decoded)
+        claims = json.loads(decoded)
+        logger.debug(f"Decoded JWT claims: {claims}")  # Debug log
+        return claims
     except Exception as e:
+        logger.error(f"Failed to decode JWT: {e}, token: {token}")  # Debug log
         raise InvalidJWTException(f"Invalid JWT: {e}")
 
 
 def inject_user_token():
-    config = configparser.ConfigParser()
-    # dev_creds.cfg is in the workout_tracer_api directory (NOT helpers)
-    cfg_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dev_creds.cfg"
-    )
-    logger.info(f"Injecting dev token: Reading config from {cfg_path}")
-    config.read(cfg_path)
-    file_id_token = config.get("default", "id_token", fallback=None)
-
-    # Use contextvar to get the current request if available
-    _request_var = contextvars.ContextVar("starlette_request")
-
+    # Remove reading from dev_creds.cfg, only use id_token from cookies
     orig_init = StarletteRequest.__init__
 
     def new_init(self, *args, **kwargs):
         scope = args[0]
-        # Try to get id_token from cookies if present
         id_token = None
         headers = list(scope.get("headers", []))
         # Find the cookie header
@@ -56,16 +47,16 @@ def inject_user_token():
                 if cookie.strip().startswith("id_token="):
                     id_token = cookie.strip().split("=", 1)[1]
                     break
-        if not id_token:
-            id_token = file_id_token
+        # Only inject Authorization header if id_token is found in cookies
         if id_token and not any(k == b"authorization" for k, v in headers):
             headers.append((b"authorization", f"Bearer {id_token}".encode("latin-1")))
             scope["headers"] = headers
+        # Optionally, adjust for local vs. staging/prod (no-op here, but you could add logic if needed)
         orig_init(self, *args, **kwargs)
 
     StarletteRequest.__init__ = new_init
-    logger.info(
-        "Injecting dev token: Authorization header will be injected into all requests."
+    logger.debug(
+        "Injecting token: Authorization header will be injected from cookies if present."
     )
 
 
@@ -88,5 +79,5 @@ def update_cognito_user_attributes(
     response = client.admin_update_user_attributes(
         UserPoolId=user_pool_id, Username=user_id, UserAttributes=attributes
     )
-    logger.info(f"Updated Cognito user {user_id} attributes: {attributes}")
+    logger.debug(f"Updated Cognito user {user_id} attributes: {attributes}")
     return response
