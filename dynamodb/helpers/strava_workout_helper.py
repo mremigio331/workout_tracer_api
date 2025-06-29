@@ -56,7 +56,7 @@ class StravaWorkoutHelper:
             ).get("Item")
             action = "update" if before_item else "create"
             self.table.put_item(Item=item)
-            self.logger.info(
+            self.logger.debug(
                 f"Sucessfully Put Strava workout {workout_id} for {user_id}"
             )
             return workout, action

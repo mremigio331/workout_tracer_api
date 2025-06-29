@@ -27,11 +27,13 @@ class StravaClient:
             namespace=f"WorkoutTracer-{stage.upper()}", service="workout_tracer_api"
         )
 
-        strava_keys = self._get_strava_api_configs()
+        strava_keys = self.get_strava_api_configs()
         self.strava_client_id = strava_keys["STRAVA_CLIENT_ID"]
         self.strava_client_secret = strava_keys["STRAVA_CLIENT_SECRET"]
+        self.callback_url = os.getenv("API_DOMAIN_NAME")
+        self.verify_token = strava_keys.get(f"{stage.upper()}_VERIFY_TOKEN")
 
-    def _get_strava_api_configs(self):
+    def get_strava_api_configs(self):
         client = boto3.client("secretsmanager", region_name="us-west-2")
         response = client.get_secret_value(SecretId="StravaKeys")
 
@@ -78,8 +80,13 @@ class StravaClient:
     ):
         self.metrics.add_dimension(name="Endpoint", value="/api/v3/athlete/activities")
         self.metrics.add_metric(name="StravaApiCall", unit=MetricUnit.Count, value=1)
+        self.logger.info(
+            f"Fetching athlete activities with per_page={per_page}, after={after}, before={before}"
+        )
         """
-        Fetches all athlete activities. By default, pulls activities from the last 7 days unless 'after' or 'before' is specified.
+        Fetches all athlete activities. By default, pulls all activities unless 'after' or 'before' is specified.
+        If 'after' is provided, only activities after that Unix timestamp are returned.
+        If 'before' is provided, only activities before that Unix timestamp are returned.
         """
         url = "https://www.strava.com/api/v3/athlete/activities"
         headers = {
@@ -102,12 +109,18 @@ class StravaClient:
             if before is not None:
                 params["before"] = int(before)
 
+            self.logger.debug(f"Requesting page {page} with params: {params}")
+
             try:
                 response = requests.get(url, headers=headers, params=params)
                 request_count += 1
 
+                self.logger.debug(
+                    f"Received response status: {response.status_code} for page {page}"
+                )
+
                 if response.status_code == 429:
-                    self.logger.warning("⏳ Rate limit hit. Waiting 15 minutes...")
+                    self.logger.warning("Rate limit hit. Waiting 15 minutes...")
                     time.sleep(15 * 60)
                     continue  # retry same page
 
@@ -122,7 +135,10 @@ class StravaClient:
                     break
 
                 data = response.json()
+                self.logger.debug(f"Fetched {len(data)} activities on page {page}")
+
                 if not data:
+                    self.logger.info(f"No more activities found after page {page}.")
                     break  # No more activities
 
                 all_activities.extend(data)
@@ -145,6 +161,7 @@ class StravaClient:
                     f"Error fetching athlete activities: {e}"
                 )
 
+        self.logger.info(f"Total activities fetched: {len(all_activities)}")
         return all_activities
 
     def get_full_activity_by_id(self, access_token, activity_id):
@@ -225,7 +242,7 @@ class StravaClient:
                 f"Error refreshing Strava access token: {e}"
             )
 
-    def create_push_subscription(self, callback_url, verify_token, access_token=None):
+    def create_push_subscription(self, access_token=None):
         self.metrics.add_dimension(name="Endpoint", value="/api/v3/push_subscriptions")
         self.metrics.add_metric(name="StravaApiCall", unit=MetricUnit.Count, value=1)
         """
@@ -241,7 +258,7 @@ class StravaClient:
         data = {
             "client_id": self.strava_client_id,
             "client_secret": self.strava_client_secret,
-            "callback_url": callback_url,
+            "callback_url": f"{self.callback_url}/strava/subscription",
             "verify_token": verify_token,
         }
         try:

@@ -28,7 +28,7 @@ class StravaProfileHelper:
 
     def create_strava_profile(
         self,
-        user_id: int,
+        user_id: str,
         strava_id: int = None,
         username: str = None,
         resource_state: int = None,
@@ -49,11 +49,20 @@ class StravaProfileHelper:
         profile: str = None,
         friend: Any = None,
         follower: Any = None,
+        webhook_onboarded: bool = False,
     ) -> StravaAthleteModel:
         """
         Create or update a Strava athlete profile in DynamoDB.
         Assumes PK is '#USER:{user_id}' and SK is 'STRAVA_PROFILE'.
+        Raises an exception if strava_id already exists for another user.
         """
+        # Check if strava_id already exists for a different user
+        if strava_id is not None:
+            existing_user_id = self.get_user_id_by_strava_id(strava_id)
+            if existing_user_id is not None and str(existing_user_id) != str(user_id):
+                error_msg = f"Strava ID {strava_id} is already associated with user_id {existing_user_id}."
+                self.logger.error(error_msg)
+                raise Exception(error_msg)
         # Build the model instance with ISO string for created_at/updated_at
         profile = StravaAthleteModel(
             user_id=user_id,
@@ -91,6 +100,7 @@ class StravaProfileHelper:
             profile=locals().get("profile"),
             friend=locals().get("friend"),
             follower=locals().get("follower"),
+            webhook_onboarded=locals().get("webhook_onboarded", False),  # Added field
         )
         item = self._decimals_to_floats(profile.dict())
         item["PK"] = f"#USER:{user_id}"
@@ -118,7 +128,7 @@ class StravaProfileHelper:
             # Use audit_action_helper for audit (pass model instances, not dicts)
 
             self.audit_action_helper.create_audit_record(
-                user_id=str(user_id),
+                user_id=user_id,
                 sk=self.audit_sk,
                 action=(
                     AuditActions.CREATE.value
@@ -194,6 +204,7 @@ class StravaProfileHelper:
         profile: str = None,
         friend: Any = None,
         follower: Any = None,
+        webhook_onboarded: bool = None,  # Added field
     ):
         # Collect all non-None parameters except self and user_id
         updated_changes = {
@@ -257,6 +268,36 @@ class StravaProfileHelper:
         except Exception as e:
             self.logger.error(
                 f"Unexpected error in update_strava_profile for user_id: {user_id}: {e}"
+            )
+            return None
+
+    def get_user_id_by_strava_id(self, strava_id: int) -> str | None:
+        """
+        Find the user_id for a given strava_id. Assumes 1-1 mapping.
+        """
+        try:
+            response = self.table.scan(
+                FilterExpression="strava_id = :sid AND SK = :sk",
+                ExpressionAttributeValues={
+                    ":sid": strava_id,
+                    ":sk": self.sk,
+                },
+                ProjectionExpression="user_id",
+            )
+            items = response.get("Items", [])
+            if items:
+                return items[0].get("user_id")
+            else:
+                self.logger.warning(f"No user found for strava_id: {strava_id}")
+                return None
+        except ClientError as e:
+            self.logger.error(
+                f"Error finding user_id by strava_id: {e.response['Error']['Message']}"
+            )
+            return None
+        except Exception as e:
+            self.logger.error(
+                f"Unexpected error in get_user_id_by_strava_id for strava_id: {strava_id}: {e}"
             )
             return None
 
