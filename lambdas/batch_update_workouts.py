@@ -95,9 +95,13 @@ def lambda_handler(event, context):
             logger.info(f"Processing user_id={user_id}, workout_id={workout_id}")
 
             # Use the helper to get valid credentials
-            strava_credentials = get_valid_strava_credentials(user_id, request_id, logger)
+            strava_credentials = get_valid_strava_credentials(
+                user_id, request_id, logger
+            )
             if not strava_credentials:
-                logger.warning(f"Strava credentials not found or could not be refreshed for user_id: {user_id}")
+                logger.warning(
+                    f"Strava credentials not found or could not be refreshed for user_id: {user_id}"
+                )
                 errors += 1
                 continue
 

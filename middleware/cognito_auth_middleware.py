@@ -22,6 +22,7 @@ COGNITO_AUTH_URL = f"{COGNITO_DOMAIN}/login?" + urlencode(
 logger = logging.getLogger("cognito_auth_middleware")
 logger.setLevel(logging.INFO)
 
+
 class CognitoAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         logger.debug(f"Request path: {request.url.path} | Query: {request.url.query}")

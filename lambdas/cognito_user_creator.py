@@ -1,4 +1,5 @@
 import os
+import boto3
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from dynamodb.helpers.user_profile_helper import UserProfileHelper
@@ -21,11 +22,27 @@ def handler(event: dict, context: LambdaContext) -> dict:
         try:
             user_profile_helper = UserProfileHelper(request_id=context.aws_request_id)
             user_profile_helper.create_user_profile(
-                user_id=user_id, email=email, name=name
+                user_id=user_id,
+                email=email,
+                name=name,
             )
+            # Publish to SNS topic if ARN is set
+
         except Exception as e:
             logger.error(f"Failed to create user profile: {e}")
             raise
+
+        try:
+            topic_arn = os.environ.get("USER_ADDED_TOPIC_ARN")
+            if topic_arn:
+                sns = boto3.client("sns")
+                sns.publish(
+                    TopicArn=topic_arn,
+                    Subject="New WorkoutTracer User Signup",
+                    Message=f"New user signed up:\nID: {user_id}\nEmail: {email}\nName: {name}",
+                )
+        except Exception as e:
+            logger.error(f"Failed to publish to SNS topic: {e}")
 
     else:
         logger.warning(f"Unsupported triggerSource: {event['triggerSource']}")
