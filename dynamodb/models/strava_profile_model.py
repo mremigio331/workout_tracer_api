@@ -4,6 +4,7 @@ from typing import Optional, Any
 
 class StravaAthleteModel(BaseModel):
     user_id: str
+    strava_id: int
     username: Optional[str] = None
     resource_state: Optional[int] = None
     firstname: Optional[str] = None

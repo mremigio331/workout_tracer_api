@@ -6,9 +6,9 @@ from endpoints.strava import (
     update_strava_callback,
     identify_strava_workouts,
     update_strava_workout,
-    batch_update_strava_workout,
     get_strava_workouts,
-    update_all_strava_workouts,
+    strava_webhook_verification,
+    strava_webhook_event,
 )
 
 
@@ -33,12 +33,16 @@ def get_all_routes(app):
     )
     app.include_router(update_strava_callback.router, prefix="/strava", tags=["Strava"])
     app.include_router(update_strava_workout.router, prefix="/strava", tags=["Strava"])
-    app.include_router(
-        batch_update_strava_workout.router, prefix="/strava", tags=["Strava"]
-    )
+    # app.include_router(
+    #     batch_update_strava_workout.router, prefix="/strava", tags=["Strava"]
+    # )
     app.include_router(get_strava_workouts.router, prefix="/strava", tags=["Strava"])
+    # app.include_router(
+    #     update_all_strava_workouts.router, prefix="/strava", tags=["Strava"]
+    # )
     app.include_router(
-        update_all_strava_workouts.router, prefix="/strava", tags=["Strava"]
+        strava_webhook_verification.router, prefix="/strava", tags=["Strava"]
     )
+    app.include_router(strava_webhook_event.router, prefix="/strava", tags=["Strava"])
 
     return app

@@ -16,6 +16,43 @@ import boto3
 logger = Logger(service="workout-tracer-strava-batch-update")
 
 
+def get_valid_strava_credentials(user_id, request_id, logger):
+    credentials_helper = StravaCredentialsHelper(request_id=request_id)
+    strava_credentials = credentials_helper.get_credentials(user_id=user_id)
+    strava_client = StravaClient(request_id=request_id)
+    if not strava_credentials:
+        logger.warning(f"Strava credentials not found for user_id: {user_id}")
+        return None
+
+    if strava_credentials["expires_at"] < int(datetime.now().timestamp()):
+        logger.info(
+            f"Strava credentials for user_id {user_id} have expired. Refreshing..."
+        )
+        new_creds = strava_client.refresh_access_token(
+            refresh_token=strava_credentials["refresh_token"]
+        )
+        if not new_creds:
+            logger.error(f"Failed to refresh Strava credentials for user_id: {user_id}")
+            return None
+
+        strava_credentials = new_creds
+        try:
+            logger.info(f"Storing Strava credentials for user_id: {user_id}")
+            credentials_helper.create_or_update_credentials(
+                token_type=strava_credentials.get("token_type"),
+                expires_at=strava_credentials.get("expires_at"),
+                expires_in=strava_credentials.get("expires_in"),
+                refresh_token=strava_credentials.get("refresh_token"),
+                access_token=strava_credentials.get("access_token"),
+                user_id=user_id,
+            )
+            logger.info("Successfully updated Strava credentials.")
+        except Exception as e:
+            logger.error(f"Error updating Strava credentials: {e}")
+            return None
+    return strava_credentials
+
+
 def lambda_handler(event, context):
     request_id = getattr(context, "aws_request_id", None)
     logger.append_keys(request_id=request_id)
@@ -57,44 +94,12 @@ def lambda_handler(event, context):
             workout_id = body.get("workout_id")
             logger.info(f"Processing user_id={user_id}, workout_id={workout_id}")
 
-            credentials_helper = StravaCredentialsHelper(request_id=request_id)
-            strava_credentials = credentials_helper.get_credentials(user_id=user_id)
-
+            # Use the helper to get valid credentials
+            strava_credentials = get_valid_strava_credentials(user_id, request_id, logger)
             if not strava_credentials:
-                logger.warning(f"Strava credentials not found for user_id: {user_id}")
+                logger.warning(f"Strava credentials not found or could not be refreshed for user_id: {user_id}")
                 errors += 1
                 continue
-
-            if strava_credentials.get("expires_at") is None:
-                logger.error(
-                    f"Strava credentials for user_id {user_id} missing 'expires_at': {strava_credentials}"
-                )
-                errors += 1
-                continue
-
-            if strava_credentials["expires_at"] < int(datetime.now().timestamp()):
-                logger.info(
-                    f"Strava credentials expired for user_id={user_id}, refreshing..."
-                )
-                strava_client = StravaClient(request_id=request_id)
-                new_creds = strava_client.refresh_access_token(
-                    refresh_token=strava_credentials["refresh_token"]
-                )
-                if not new_creds:
-                    logger.error(
-                        f"Failed to refresh Strava credentials for user_id: {user_id}"
-                    )
-                    errors += 1
-                    continue
-                strava_credentials = new_creds
-                credentials_helper.create_or_update_credentials(
-                    token_type=strava_credentials.get("token_type"),
-                    expires_at=strava_credentials.get("expires_at"),
-                    expires_in=strava_credentials.get("expires_in"),
-                    refresh_token=strava_credentials.get("refresh_token"),
-                    access_token=strava_credentials.get("access_token"),
-                    user_id=user_id,
-                )
 
             strava_client = StravaClient(request_id=request_id)
             workout_data = strava_client.get_full_activity_by_id(
@@ -127,7 +132,6 @@ def lambda_handler(event, context):
             errors += 1
 
         finally:
-            # ✅ Flush metrics for this specific StravaClient instance
             if strava_client:
                 try:
                     strava_client.metrics.flush_metrics()

@@ -22,24 +22,20 @@ COGNITO_AUTH_URL = f"{COGNITO_DOMAIN}/login?" + urlencode(
 logger = logging.getLogger("cognito_auth_middleware")
 logger.setLevel(logging.INFO)
 
-logger.info(f"COGNITO_DOMAIN: {COGNITO_DOMAIN}")
-logger.info(f"COGNITO_CLIENT_ID: {COGNITO_CLIENT_ID}")
-logger.info(f"COGNITO_API_REDIRECT_URI: {COGNITO_API_REDIRECT_URI}")
-logger.info(f"COGNITO_AUTH_URL: {COGNITO_AUTH_URL}")
-
-
 class CognitoAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        logger.info(f"Request path: {request.url.path} | Query: {request.url.query}")
+        logger.debug(f"Request path: {request.url.path} | Query: {request.url.query}")
         # Only apply to /docs and root (for redirect)
         if request.url.path in ["/docs", "/"]:
             id_token = request.cookies.get("id_token")
             code = request.query_params.get("code")
-            logger.info(
+            logger.debug(
                 f"id_token in cookies: {bool(id_token)} | code in query: {code}"
             )
             if not id_token and code:
-                logger.info("No id_token, but code present. Attempting token exchange.")
+                logger.debug(
+                    "No id_token, but code present. Attempting token exchange."
+                )
                 # Exchange code for tokens
                 async with httpx.AsyncClient() as client:
                     token_resp = await client.post(
@@ -52,11 +48,13 @@ class CognitoAuthMiddleware(BaseHTTPMiddleware):
                         },
                         headers={"Content-Type": "application/x-www-form-urlencoded"},
                     )
-                logger.info(f"Token exchange response status: {token_resp.status_code}")
+                logger.debug(
+                    f"Token exchange response status: {token_resp.status_code}"
+                )
                 if token_resp.status_code == 200:
                     tokens = token_resp.json()
                     id_token = tokens.get("id_token")
-                    logger.info(
+                    logger.debug(
                         f"Token exchange success. id_token present: {bool(id_token)}"
                     )
                     if id_token:
@@ -66,13 +64,14 @@ class CognitoAuthMiddleware(BaseHTTPMiddleware):
                 else:
                     logger.error(f"Token exchange failed: {token_resp.text}")
                 # If token exchange fails, redirect to Cognito login
-                logger.info("Redirecting to Cognito login (token exchange failed).")
+                logger.debug("Redirecting to Cognito login (token exchange failed).")
                 return RedirectResponse(COGNITO_AUTH_URL)
+            # This block is likely NOT being executed because another middleware (JWTMiddleware) is returning 401 first
             if request.url.path == "/docs" and not id_token:
-                logger.info("No id_token for /docs, redirecting to Cognito login.")
+                logger.debug("No id_token for /docs, redirecting to Cognito login.")
                 return RedirectResponse(COGNITO_AUTH_URL)
         response = await call_next(request)
-        logger.info(
+        logger.debug(
             f"Response status for {request.url.path}: {getattr(response, 'status_code', 'unknown')}"
         )
         return response

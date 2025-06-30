@@ -23,7 +23,7 @@ router = APIRouter()
 
 
 @router.post(
-    "/strava/update_all_workouts",
+    "/update_all_workouts",
     summary="Publish all Strava workouts to SQS",
     response_description="Published Strava workout info",
 )
@@ -120,12 +120,7 @@ def update_all_strava_workouts(request: Request):
         "identified_workout_ids": len(workout_ids),
         "total_workouts": total,
     }
-
-    # If you use StravaClient in this endpoint, flush its metrics here.
-    # Example:
-    # if strava_client:
-    #     strava_client.metrics.flush_metrics()
-
+    strava_client.metrics.flush_metrics()
     return JSONResponse(
         content=response_content,
         status_code=200,
