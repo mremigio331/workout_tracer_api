@@ -26,7 +26,7 @@ class UserProfileHelper:
     def create_user_profile(self, user_id: str, email: str, name: str):
         """
         Create a new user profile in DynamoDB.
-        Assumes PK is '#USER:{user_id}' and SK is 'USER_PROFILE'.
+        Assumes PK is 'USER#{user_id}' and SK is 'USER_PROFILE'.
         """
         profile = UserProfileModel(
             user_id=user_id,
@@ -36,7 +36,7 @@ class UserProfileHelper:
             # cached_map_location will default to Manhattan if not provided
         )
         item = profile.dict()
-        item["PK"] = f"#USER:{user_id}"
+        item["PK"] = f"USER#{user_id}"
         item["SK"] = self.sk
 
         try:
@@ -59,16 +59,14 @@ class UserProfileHelper:
         Returns a dict with user_id, email, name, and public_profile.
         """
         try:
-            response = self.table.get_item(
-                Key={"PK": f"#USER:{user_id}", "SK": self.sk}
-            )
+            response = self.table.get_item(Key={"PK": f"USER#{user_id}", "SK": self.sk})
             item = response.get("Item")
             if item:
                 self.logger.info(f"Fetched user profile for {user_id}: {item}")
                 pk_value = item.get("PK", "")
                 user_id_value = (
-                    pk_value.replace("#USER:", "")
-                    if pk_value.startswith("#USER:")
+                    pk_value.replace("USER#", "")
+                    if pk_value.startswith("USER#")
                     else pk_value
                 )
                 result = {
@@ -130,12 +128,12 @@ class UserProfileHelper:
         try:
             # Fetch current profile for audit
             before_item = self.table.get_item(
-                Key={"PK": f"#USER:{user_id}", "SK": self.sk}
+                Key={"PK": f"USER#{user_id}", "SK": self.sk}
             ).get("Item")
             before = UserProfileModel(**before_item) if before_item else None
 
             response = self.table.update_item(
-                Key={"PK": f"#USER:{user_id}", "SK": self.sk},
+                Key={"PK": f"USER#{user_id}", "SK": self.sk},
                 UpdateExpression=update_expression,
                 ExpressionAttributeNames=expr_attr_names,
                 ExpressionAttributeValues=expr_attr_values,
