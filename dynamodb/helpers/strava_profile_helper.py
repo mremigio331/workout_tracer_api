@@ -53,7 +53,7 @@ class StravaProfileHelper:
     ) -> StravaAthleteModel:
         """
         Create or update a Strava athlete profile in DynamoDB.
-        Assumes PK is '#USER:{user_id}' and SK is 'STRAVA_PROFILE'.
+        Assumes PK is 'USER#{user_id}' and SK is 'STRAVA_PROFILE'.
         Raises an exception if strava_id already exists for another user.
         """
         # Check if strava_id already exists for a different user
@@ -103,13 +103,13 @@ class StravaProfileHelper:
             webhook_onboarded=locals().get("webhook_onboarded", False),  # Added field
         )
         item = self._decimals_to_floats(profile.dict())
-        item["PK"] = f"#USER:{user_id}"
+        item["PK"] = f"USER#{user_id}"
         item["SK"] = self.sk
 
         try:
             # Fetch current profile for audit (before)
             before_item = self.table.get_item(
-                Key={"PK": f"#USER:{user_id}", "SK": self.sk}
+                Key={"PK": f"USER#{user_id}", "SK": self.sk}
             ).get("Item")
             self.logger.info(f"Fetched before_item for audit: {before_item}")
             try:
@@ -158,9 +158,7 @@ class StravaProfileHelper:
         Retrieve Strava athlete profile from DynamoDB and return as a JSON-serializable dict.
         """
         try:
-            response = self.table.get_item(
-                Key={"PK": f"#USER:{user_id}", "SK": self.sk}
-            )
+            response = self.table.get_item(Key={"PK": f"USER#{user_id}", "SK": self.sk})
             item = response.get("Item")
             if not item:
                 self.logger.warning(f"No Strava profile found for user_id: {user_id}")
@@ -226,12 +224,12 @@ class StravaProfileHelper:
         try:
             # Fetch current profile for audit
             before_item = self.table.get_item(
-                Key={"PK": f"#USER:{user_id}", "SK": self.sk}
+                Key={"PK": f"USER#{user_id}", "SK": self.sk}
             ).get("Item")
             before = StravaAthleteModel(**before_item) if before_item else None
 
             response = self.table.update_item(
-                Key={"PK": f"#USER:{user_id}", "SK": self.sk},
+                Key={"PK": f"USER#{user_id}", "SK": self.sk},
                 UpdateExpression=update_expr,
                 ExpressionAttributeNames=expr_attr_names,
                 ExpressionAttributeValues=expr_attr_values,

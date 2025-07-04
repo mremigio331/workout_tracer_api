@@ -67,7 +67,7 @@ class StravaCredentialsHelper:
 
         now_iso = datetime.utcnow().isoformat()
         item = {
-            "PK": f"#USER:{user_id}",
+            "PK": f"USER#{user_id}",
             "SK": self.sk,
             "token_type": token_type,
             "expires_at": expires_at,
@@ -83,7 +83,7 @@ class StravaCredentialsHelper:
         try:
             # Fetch current credentials for audit (if any)
             before_item = self.table.get_item(
-                Key={"PK": f"#USER:{user_id}", "SK": self.sk}
+                Key={"PK": f"USER#{user_id}", "SK": self.sk}
             ).get("Item")
             before = StravaCredentialsModel(**before_item) if before_item else None
 
@@ -120,9 +120,7 @@ class StravaCredentialsHelper:
         Retrieve and decrypt Strava credentials from DynamoDB.
         """
         try:
-            response = self.table.get_item(
-                Key={"PK": f"#USER:{user_id}", "SK": self.sk}
-            )
+            response = self.table.get_item(Key={"PK": f"USER#{user_id}", "SK": self.sk})
             item = response.get("Item")
             if not item:
                 self.logger.warning(

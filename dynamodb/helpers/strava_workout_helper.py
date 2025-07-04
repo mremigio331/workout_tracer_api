@@ -32,7 +32,7 @@ class StravaWorkoutHelper:
         """
         Create or overwrite a Strava workout in DynamoDB.
         Returns a tuple: (StravaWorkoutModel, "create" or "update")
-        Assumes PK is '#USER:{user_id}' and SK is 'STRAVA_WORKOUT#{workout_id}'.
+        Assumes PK is 'USER#{user_id}' and SK is 'STRAVA_WORKOUT#{workout_id}'.
         """
         workout = StravaWorkoutModel(**workout_data)
         workout_id = getattr(workout, "id", None)
@@ -42,7 +42,7 @@ class StravaWorkoutHelper:
 
         sk = f"{self.sk}#{workout_id}"
         item = self.convert_floats_to_decimal(workout.dict())
-        item["PK"] = f"#USER:{user_id}"
+        item["PK"] = f"USER#{user_id}"
         item["SK"] = sk
 
         try:
@@ -52,7 +52,7 @@ class StravaWorkoutHelper:
             self.logger.debug(f"Incoming workout_data: {workout_data}")
 
             before_item = self.table.get_item(
-                Key={"PK": f"#USER:{user_id}", "SK": sk}
+                Key={"PK": f"USER#{user_id}", "SK": sk}
             ).get("Item")
             action = "update" if before_item else "create"
             self.table.put_item(Item=item)
@@ -80,7 +80,7 @@ class StravaWorkoutHelper:
         """
         try:
             sk = f"{self.sk}#{workout_id}" if workout_id else self.sk
-            response = self.table.get_item(Key={"PK": f"#USER:{user_id}", "SK": sk})
+            response = self.table.get_item(Key={"PK": f"USER#{user_id}", "SK": sk})
             item = response.get("Item")
             if not item:
                 self.logger.warning(
@@ -109,7 +109,7 @@ class StravaWorkoutHelper:
         try:
             response = self.table.query(
                 KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(
-                    f"#USER:{user_id}"
+                    f"USER#{user_id}"
                 )
                 & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk)
             )
@@ -134,7 +134,7 @@ class StravaWorkoutHelper:
         try:
             response = self.table.query(
                 KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(
-                    f"#USER:{user_id}"
+                    f"USER#{user_id}"
                 )
                 & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk)
             )
@@ -142,7 +142,7 @@ class StravaWorkoutHelper:
             while "LastEvaluatedKey" in response:
                 response = self.table.query(
                     KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(
-                        f"#USER:{user_id}"
+                        f"USER#{user_id}"
                     )
                     & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk),
                     ExclusiveStartKey=response["LastEvaluatedKey"],
@@ -169,7 +169,7 @@ class StravaWorkoutHelper:
         sk = f"{self.sk}#{workout_id}"
         try:
             response = self.table.delete_item(
-                Key={"PK": f"#USER:{user_id}", "SK": sk}, ReturnValues="ALL_OLD"
+                Key={"PK": f"USER#{user_id}", "SK": sk}, ReturnValues="ALL_OLD"
             )
             if "Attributes" in response:
                 self.logger.info(

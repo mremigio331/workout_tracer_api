@@ -59,7 +59,7 @@ class AuditActionHelper:
         Stores a list of audit actions under a single PK/SK.
         Expects 'before' and 'after' to be model instances or None.
         """
-        pk = f"#USER:{user_id}"
+        pk = f"USER#{user_id}"
         timestamp = datetime.utcnow().isoformat()
 
         before_dict = self.convert_floats_to_decimal(self.to_dict(before))
