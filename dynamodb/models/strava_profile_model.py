@@ -19,7 +19,6 @@ class StravaAthleteModel(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     badge_type_id: Optional[int] = None
-    weight: Optional[float] = None
     profile_medium: Optional[str] = None
     profile: Optional[str] = None
     friend: Optional[Any] = None

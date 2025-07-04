@@ -25,12 +25,15 @@ class StravaClient:
         else:
             self.stage = os.getenv("STAGE", "dev")
         self.metrics = Metrics(
-            namespace=f"WorkoutTracer-{self.stage.upper()}", service="workout_tracer_api"
+            namespace=f"WorkoutTracer-{self.stage.upper()}",
+            service="workout_tracer_api",
         )
 
         strava_keys = self.get_strava_api_configs()
         self.strava_client_id = strava_keys[f"{self.stage.upper()}_STRAVA_CLIENT_ID"]
-        self.strava_client_secret = strava_keys[f"{self.stage.upper()}_STRAVA_CLIENT_SECRET"]
+        self.strava_client_secret = strava_keys[
+            f"{self.stage.upper()}_STRAVA_CLIENT_SECRET"
+        ]
         self.callback_url = os.getenv("API_DOMAIN_NAME")
         self.verify_token = strava_keys.get(f"{self.stage.upper()}_VERIFY_TOKEN")
 
@@ -44,6 +47,7 @@ class StravaClient:
     def get_strava_callback_url(self, auth_code):
         self.metrics.add_dimension(name="Endpoint", value="/oauth/token")
         self.metrics.add_metric(name="StravaApiCall", unit=MetricUnit.Count, value=1)
+
         try:
             response = requests.post(
                 "https://www.strava.com/oauth/token",
