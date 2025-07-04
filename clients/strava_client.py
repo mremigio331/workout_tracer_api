@@ -9,29 +9,30 @@ import time
 import datetime
 import os
 
-stage = os.getenv("STAGE", "dev")
-
 
 class StravaAuthCodeExchangeError(Exception):
     pass
 
 
 class StravaClient:
-    def __init__(self, request_id=None):
+    def __init__(self, request_id=None, stage=None):
         self.logger = Logger(service="workout_tracer_api")
         if request_id:
             self.logger.append_keys(request_id=request_id)
 
-        stage = os.getenv("STAGE", "dev")
+        if stage:
+            self.stage = stage
+        else:
+            self.stage = os.getenv("STAGE", "dev")
         self.metrics = Metrics(
-            namespace=f"WorkoutTracer-{stage.upper()}", service="workout_tracer_api"
+            namespace=f"WorkoutTracer-{self.stage.upper()}", service="workout_tracer_api"
         )
 
         strava_keys = self.get_strava_api_configs()
-        self.strava_client_id = strava_keys[f"{stage.upper()}STRAVA_CLIENT_ID"]
-        self.strava_client_secret = strava_keys["{stage.upper()}STRAVA_CLIENT_SECRET"]
+        self.strava_client_id = strava_keys[f"{self.stage.upper()}_STRAVA_CLIENT_ID"]
+        self.strava_client_secret = strava_keys[f"{self.stage.upper()}_STRAVA_CLIENT_SECRET"]
         self.callback_url = os.getenv("API_DOMAIN_NAME")
-        self.verify_token = strava_keys.get(f"{stage.upper()}_VERIFY_TOKEN")
+        self.verify_token = strava_keys.get(f"{self.stage.upper()}_VERIFY_TOKEN")
 
     def get_strava_api_configs(self):
         client = boto3.client("secretsmanager", region_name="us-west-2")
