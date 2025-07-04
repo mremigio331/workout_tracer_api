@@ -57,7 +57,7 @@ def lambda_handler(event, context):
     request_id = getattr(context, "aws_request_id", None)
     logger.append_keys(request_id=request_id)
 
-    max_messages = event.get("max_messages", 200) if isinstance(event, dict) else 200
+    max_messages = event.get("max_messages", 550) if isinstance(event, dict) else 550
 
     sqs_queue_url = os.getenv("SQS_QUEUE_URL")
     if not sqs_queue_url:
