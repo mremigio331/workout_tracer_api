@@ -28,8 +28,8 @@ class StravaClient:
         )
 
         strava_keys = self.get_strava_api_configs()
-        self.strava_client_id = strava_keys["STRAVA_CLIENT_ID"]
-        self.strava_client_secret = strava_keys["STRAVA_CLIENT_SECRET"]
+        self.strava_client_id = strava_keys[f"{stage.upper()}STRAVA_CLIENT_ID"]
+        self.strava_client_secret = strava_keys["{stage.upper()}STRAVA_CLIENT_SECRET"]
         self.callback_url = os.getenv("API_DOMAIN_NAME")
         self.verify_token = strava_keys.get(f"{stage.upper()}_VERIFY_TOKEN")
 

@@ -139,6 +139,15 @@ class StravaWorkoutHelper:
                 & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk)
             )
             items = response.get("Items", [])
+            while "LastEvaluatedKey" in response:
+                response = self.table.query(
+                    KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(
+                        f"#USER:{user_id}"
+                    )
+                    & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk),
+                    ExclusiveStartKey=response["LastEvaluatedKey"],
+                )
+                items.extend(response.get("Items", []))
             workouts = [self._decimals_to_floats(item) for item in items]
             return workouts
         except ClientError as e:
