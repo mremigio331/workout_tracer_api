@@ -271,19 +271,23 @@ class StravaProfileHelper:
     def get_user_id_by_strava_id(self, strava_id: int) -> str | None:
         """
         Find the user_id for a given strava_id. Assumes 1-1 mapping.
+        Handles DynamoDB attribute types in the result.
         """
         try:
             response = self.table.scan(
                 FilterExpression="strava_id = :sid AND SK = :sk",
                 ExpressionAttributeValues={
-                    ":sid": strava_id,
+                    ":sid": int(strava_id),
                     ":sk": self.sk,
                 },
                 ProjectionExpression="user_id",
             )
             items = response.get("Items", [])
             if items:
-                return items[0].get("user_id")
+                item = items[0]
+                if isinstance(item.get("user_id"), dict) and "S" in item["user_id"]:
+                    return item["user_id"]["S"]
+                return item.get("user_id")
             else:
                 self.logger.warning(f"No user found for strava_id: {strava_id}")
                 return None

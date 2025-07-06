@@ -32,29 +32,36 @@ class MemoryCleanupMiddleware(BaseHTTPMiddleware):
 
         gc.collect()  # Run garbage collection after every request
 
-        snapshot_after = tracemalloc.take_snapshot()
-        stats = snapshot_after.compare_to(snapshot_before, "filename")
-        total_before = (
-            sum([stat.size_diff for stat in stats if stat.size_diff < 0]) * -1
-        )
-        total_after = sum([stat.size_diff for stat in stats if stat.size_diff > 0])
+        # Only take snapshot if tracemalloc is still tracing
+        if tracemalloc.is_tracing():
+            snapshot_after = tracemalloc.take_snapshot()
+            stats = snapshot_after.compare_to(snapshot_before, "filename")
+            total_before = (
+                sum([stat.size_diff for stat in stats if stat.size_diff < 0]) * -1
+            )
+            total_after = sum([stat.size_diff for stat in stats if stat.size_diff > 0])
 
-        logger.info(
-            f"Memory cleanup: {total_before / 1024:.2f} KB freed, {total_after / 1024:.2f} KB newly allocated after request."
-        )
+            logger.info(
+                f"Memory cleanup: {total_before / 1024:.2f} KB freed, {total_after / 1024:.2f} KB newly allocated after request."
+            )
 
-        # Add a metric for memory used during the request (in KB)
-        metrics.add_metric(
-            name="RequestMemoryAllocatedKB",
-            unit=MetricUnit.Kilobytes,
-            value=total_after / 1024,
-        )
-        metrics.add_metric(
-            name="RequestMemoryFreedKB",
-            unit=MetricUnit.Kilobytes,
-            value=total_before / 1024,
-        )
-        metrics.flush_metrics()
+            # Add a metric for memory used during the request (in KB)
+            metrics.add_metric(
+                name="RequestMemoryAllocatedKB",
+                unit=MetricUnit.Kilobytes,
+                value=total_after / 1024,
+            )
+            metrics.add_metric(
+                name="RequestMemoryFreedKB",
+                unit=MetricUnit.Kilobytes,
+                value=total_before / 1024,
+            )
+            metrics.flush_metrics()
 
-        tracemalloc.stop()
+            tracemalloc.stop()
+        else:
+            logger.warning(
+                "tracemalloc is not tracing; skipping memory snapshot and metrics."
+            )
+
         return response

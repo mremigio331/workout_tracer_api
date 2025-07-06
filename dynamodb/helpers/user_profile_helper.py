@@ -159,3 +159,37 @@ class UserProfileHelper:
         except ClientError as e:
             self.logger.error(f"Error updating user profile fields for {user_id}: {e}")
             raise
+
+    def get_public_profiles(self):
+        """
+        Return all user profiles where public_profile == True.
+        """
+        try:
+            table_name = self.table.name
+            client = boto3.client("dynamodb", region_name="us-west-2")
+            paginator = client.get_paginator("scan")
+            public_profiles = []
+            for page in paginator.paginate(
+                TableName=table_name,
+                FilterExpression="attribute_exists(public_profile) AND public_profile = :val AND SK = :sk",
+                ExpressionAttributeValues={
+                    ":val": {"BOOL": True},
+                    ":sk": {"S": self.sk},
+                },
+                ProjectionExpression="PK,#n,SK",
+                ExpressionAttributeNames={"#n": "name"},
+            ):
+                items = page.get("Items", [])
+                self.logger.info(f"Fetched {len(items)} items from DynamoDB scan")
+                for item in items:
+                    self.logger.info(f"Processing item: {item}")
+                    profile = {
+                        "user_id": item["PK"]["S"].replace("USER#", ""),
+                        "name": item.get("name", {}).get("S"),
+                    }
+                    public_profiles.append(profile)
+            self.logger.info(f"Fetched {len(public_profiles)} public profiles")
+            return public_profiles
+        except ClientError as e:
+            self.logger.error(f"Error fetching public profiles: {e}")
+            raise

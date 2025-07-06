@@ -1,5 +1,10 @@
 from endpoints.workout_tracer import home
-from endpoints.user import get_user_profile, get_requestors_profile, update_user_profile
+from endpoints.user import (
+    get_user_profile,
+    get_requestors_profile,
+    update_user_profile,
+    get_public_users,
+)
 from endpoints.strava import (
     get_requestor_strava_profile,
     get_strava_profile,
@@ -9,6 +14,8 @@ from endpoints.strava import (
     get_strava_workouts,
     strava_webhook_verification,
     strava_webhook_event,
+    get_public_strava_workouts,
+    get_public_strava_profile,
 )
 
 
@@ -22,6 +29,7 @@ def get_all_routes(app):
     app.include_router(get_user_profile.router, prefix="/user", tags=["User"])
     app.include_router(update_user_profile.router, prefix="/user", tags=["User"])
     app.include_router(get_requestors_profile.router, prefix="/user", tags=["User"])
+    app.include_router(get_public_users.router, prefix="/user", tags=["User"])
 
     # Strava
     app.include_router(
@@ -44,5 +52,11 @@ def get_all_routes(app):
         strava_webhook_verification.router, prefix="/strava", tags=["Strava"]
     )
     app.include_router(strava_webhook_event.router, prefix="/strava", tags=["Strava"])
+    app.include_router(
+        get_public_strava_workouts.router, prefix="/strava", tags=["Strava"]
+    )
+    app.include_router(
+        get_public_strava_profile.router, prefix="/strava", tags=["Strava"]
+    )
 
     return app
