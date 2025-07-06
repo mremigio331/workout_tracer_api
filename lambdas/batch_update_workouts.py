@@ -107,13 +107,6 @@ def lambda_handler(event, context):
             )
             errors += 1
 
-        finally:
-            if strava_client:
-                try:
-                    strava_client.metrics.flush_metrics()
-                except Exception as flush_error:
-                    logger.warning(f"Error flushing metrics: {flush_error}")
-
     logger.info(f"Processed: {processed}, Errors: {errors}")
     return {
         "processed": processed,

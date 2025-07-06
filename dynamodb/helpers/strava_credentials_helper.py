@@ -8,6 +8,7 @@ from cryptography.fernet import Fernet
 import os
 from datetime import datetime
 import base64
+from clients.strava_client import StravaClient
 
 
 class StravaCredentialsHelper:
@@ -23,6 +24,7 @@ class StravaCredentialsHelper:
         self.logger = Logger()
         if request_id:
             self.logger.append_keys(request_id=request_id)
+        self.request_id = request_id
         self.sk = "STRAVA_CREDENTIALS"
         self.audit_sk = "STRAVA_CREDENTIALS_AUDIT"
         self.strava_profile_helper = StravaProfileHelper()
@@ -115,9 +117,10 @@ class StravaCredentialsHelper:
             self.logger.error(f"Error storing Strava credentials for {user_id}: {e}")
             raise
 
-    def get_credentials(self, user_id: str) -> dict | None:
+    def get_credentials(self, user_id: str, force_refresh: bool = False) -> dict | None:
         """
         Retrieve and decrypt Strava credentials from DynamoDB.
+        If expired or force_refresh is True, refresh using StravaClient and update DynamoDB.
         """
         try:
             response = self.table.get_item(Key={"PK": f"USER#{user_id}", "SK": self.sk})
@@ -134,6 +137,40 @@ class StravaCredentialsHelper:
                 "refresh_token": self.decrypt(item["refresh_token"]),
                 "access_token": self.decrypt(item["access_token"]),
             }
+            # Check if expired or force_refresh is True, and refresh if needed
+            if (
+                decrypted["expires_at"] < int(datetime.now().timestamp())
+                or force_refresh
+            ):
+                self.logger.info(
+                    f"Strava credentials for user_id {user_id} have expired or force_refresh requested. Refreshing..."
+                )
+                strava_client = StravaClient(request_id=self.request_id)
+                new_creds = strava_client.refresh_access_token(
+                    refresh_token=decrypted["refresh_token"]
+                )
+                if not new_creds:
+                    self.logger.error(
+                        f"Failed to refresh Strava credentials for user_id: {user_id}"
+                    )
+                    return None
+                try:
+                    self.logger.info(
+                        f"Storing refreshed Strava credentials for user_id: {user_id}"
+                    )
+                    self.create_or_update_credentials(
+                        token_type=new_creds.get("token_type"),
+                        expires_at=new_creds.get("expires_at"),
+                        expires_in=new_creds.get("expires_in"),
+                        refresh_token=new_creds.get("refresh_token"),
+                        access_token=new_creds.get("access_token"),
+                        user_id=user_id,
+                    )
+                    self.logger.info("Successfully updated Strava credentials.")
+                    decrypted = new_creds
+                except Exception as e:
+                    self.logger.error(f"Error updating Strava credentials: {e}")
+                    return None
             return decrypted
         except ClientError as e:
             self.logger.error(

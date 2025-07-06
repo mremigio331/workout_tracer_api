@@ -77,7 +77,6 @@ def handle_new_profile(
         except Exception as e:
             logger.error(f"Failed to invoke onboarding lambda: {e}")
 
-    strava_client.metrics.flush_metrics()
     return JSONResponse(
         content={
             "message": "Strava tokens and profile updated successfully. Onboarding lambda initiated.",
@@ -188,7 +187,6 @@ def update_strava_callback(
         else:
             logger.info(f"No existing profile found for user_id: {user_id}")
     except Exception as e:
-        strava_client.metrics.flush_metrics()
         logger.error(f"Error fetching existing Strava profile: {e}")
         return JSONResponse(
             content={"error": f"Error fetching existing Strava profile: {e}"},

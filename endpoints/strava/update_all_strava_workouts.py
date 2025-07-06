@@ -88,7 +88,6 @@ def update_all_strava_workouts(request: Request):
         "identified_workout_ids": len(workout_ids),
         "total_workouts": total,
     }
-    strava_client.metrics.flush_metrics()
     return JSONResponse(
         content=response_content,
         status_code=200,

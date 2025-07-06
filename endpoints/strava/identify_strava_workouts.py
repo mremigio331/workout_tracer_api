@@ -201,8 +201,6 @@ def grab_all_workouts(request: Request, grab_all_workouts: GrabAllWorkouts):
                 logger.error(f"Failed to store activity for user_id {user_id}: {e}")
                 logger.error(activity)
 
-        strava_client.metrics.flush_metrics()
-
         return JSONResponse(
             content={
                 "created": create_count,
@@ -213,7 +211,6 @@ def grab_all_workouts(request: Request, grab_all_workouts: GrabAllWorkouts):
         )
     except requests.RequestException as e:
         logger.error(f"Error fetching Strava activities: {e}")
-        strava_client.metrics.flush_metrics()
         return JSONResponse(
             content={"error": "Error fetching Strava activities."}, status_code=500
         )
