@@ -123,38 +123,6 @@ def grab_all_workouts(request: Request, grab_all_workouts: GrabAllWorkouts):
             content={"error": "Strava credentials not found."}, status_code=404
         )
 
-    if strava_credentials["expires_at"] < int(datetime.now().timestamp()):
-        logger.info(
-            f"Strava credentials for user_id {user_id} have expired. Refreshing..."
-        )
-        new_creds = strava_client.refresh_access_token(
-            refresh_token=strava_credentials["refresh_token"]
-        )
-        if not new_creds:
-            logger.error(f"Failed to refresh Strava credentials for user_id: {user_id}")
-            return JSONResponse(
-                content={"error": "Failed to refresh Strava credentials."},
-                status_code=500,
-            )
-        strava_credentials = new_creds
-        try:
-            logger.info(f"Storing Strava credentials for user_id: {user_id}")
-            credentials_helper.create_or_update_credentials(
-                token_type=strava_credentials.get("token_type"),
-                expires_at=strava_credentials.get("expires_at"),
-                expires_in=strava_credentials.get("expires_in"),
-                refresh_token=strava_credentials.get("refresh_token"),
-                access_token=strava_credentials.get("access_token"),
-                user_id=user_id,
-            )
-            logger.info("Successfully updated Strava credentials.")
-        except Exception as e:
-            logger.error(f"Error updating Strava credentials: {e}")
-            return JSONResponse(
-                content={"error": f"Error updating Strava credentials: {e}"},
-                status_code=500,
-            )
-
     logger.info(f"Fetching Strava workouts for user_id: {user_id}")
 
     workout_helper = StravaWorkoutHelper(request_id=request.state.request_id)

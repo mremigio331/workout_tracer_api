@@ -202,7 +202,6 @@ class StravaProfileHelper:
         profile: str = None,
         friend: Any = None,
         follower: Any = None,
-        webhook_onboarded: bool = None,  # Added field
     ):
         # Collect all non-None parameters except self and user_id
         updated_changes = {
