@@ -15,5 +15,6 @@ export KMS_KEY_ARN=$(aws kms describe-key --key-id alias/WorkoutTracer/API/Stagi
 export SQS_QUEUE_URL=$(aws sqs get-queue-url --queue-name "WorkoutTracer-RateLimitedBatcherQueue-Staging" --region us-west-2 --query "QueueUrl" --output text)
 export API_URL="https://api.staging.workouttracer.com"
 export STRAVA_ONBOARDING_LAMBDA_ARN=$(aws lambda get-function --function-name "WorkoutTracer-StravaOnboardingLambda-Staging" --region us-west-2 --query "Configuration.FunctionArn" --output text)
+export TABLE_NAME="WorkoutTracer-UserTable-Staging"
 
 uvicorn app:app --reload --port 5000

@@ -25,6 +25,9 @@ class UpdateUserProfileRequest(BaseModel):
     public_profile: Optional[bool] = Field(
         None, description="Whether the user's profile is public or private"
     )
+    distance_unit: Optional[str] = Field(
+        None, description="Distance unit for the user (e.g., Imperial, Metric)"
+    )
 
 
 @router.put("/profile", response_model=UpdateUserProfileRequest)
@@ -49,6 +52,7 @@ def update_user_profile(request: Request, user_profile: UpdateUserProfileRequest
             name=user_profile.name,
             email=user_profile.email,
             public_profile=user_profile.public_profile,
+            distance_unit=user_profile.distance_unit,
         )
         # Use dict() for Pydantic models, fallback to __dict__ for others
         if updated_profile:
