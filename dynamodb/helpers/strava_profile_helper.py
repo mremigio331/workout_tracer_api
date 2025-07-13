@@ -7,7 +7,6 @@ import base64
 from decimal import Decimal
 from datetime import datetime
 from typing import Any
-from dynamodb.helpers.audit_actions_helper import AuditActions, AuditActionHelper
 
 
 class StravaProfileHelper:
@@ -24,7 +23,6 @@ class StravaProfileHelper:
             self.logger.append_keys(request_id=request_id)
         self.sk = "STRAVA_PROFILE"
         self.audit_sk = "STRAVA_PROFILE_AUDIT"
-        self.audit_action_helper = AuditActionHelper(request_id=request_id)
 
     def create_strava_profile(
         self,
@@ -125,22 +123,6 @@ class StravaProfileHelper:
 
             self.table.put_item(Item=item)
             self.logger.info(f"Created/Updated Strava profile for {user_id}: {item}")
-            # Use audit_action_helper for audit (pass model instances, not dicts)
-
-            self.audit_action_helper.create_audit_record(
-                user_id=user_id,
-                sk=self.audit_sk,
-                action=(
-                    AuditActions.CREATE.value
-                    if before is None
-                    else AuditActions.UPDATE.value
-                ),
-                before=None,
-                after=profile,
-            )
-            self.logger.info(
-                f"Successfully created audit record for user_id: {user_id}"
-            )
             return profile
         except ClientError as e:
             self.logger.error(
@@ -240,17 +222,6 @@ class StravaProfileHelper:
             )
             if updated_item:
                 after = StravaAthleteModel(**updated_item)
-
-                self.audit_action_helper.create_audit_record(
-                    user_id=str(user_id),
-                    sk=self.audit_sk,
-                    action=AuditActions.UPDATE.value,
-                    before=before,
-                    after=after,
-                )
-                self.logger.info(
-                    f"Successfully created audit record for user_id: {user_id}"
-                )
                 return after
             else:
                 self.logger.warning(

@@ -6,8 +6,6 @@ import os
 from decimal import Decimal
 from datetime import datetime
 from typing import Any, List, Dict
-from dynamodb.helpers.audit_actions_helper import AuditActions, AuditActionHelper
-from constants.general import SERVICE_NAME
 
 
 class StravaWorkoutHelper:
@@ -23,8 +21,6 @@ class StravaWorkoutHelper:
         if request_id:
             self.logger.append_keys(request_id=request_id)
         self.sk = "STRAVA_WORKOUT"
-        self.audit_sk = "STRAVA_WORKOUT_AUDIT"
-        self.audit_action_helper = AuditActionHelper(request_id=request_id)
 
     def put_strava_workout(
         self, user_id: int, workout_data: dict
