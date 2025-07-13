@@ -6,6 +6,7 @@ import os
 from decimal import Decimal
 from datetime import datetime
 from typing import Any, List, Dict
+from constants.general import SERVICE_NAME
 
 
 class StravaWorkoutHelper:
