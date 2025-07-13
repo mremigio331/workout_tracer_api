@@ -35,9 +35,12 @@ def get_strava_workouts(
     # Decode next_token to get offset
     if next_token:
         try:
-            offset = int(base64.urlsafe_b64decode(next_token.encode()).decode())
-        except Exception:
-            logger.warning("Invalid next_token provided, defaulting to offset=0")
+            # Defensive: decode and strip whitespace, ensure int
+            offset = int(base64.urlsafe_b64decode(next_token.encode()).decode().strip())
+        except Exception as e:
+            logger.warning(
+                f"Invalid next_token provided ('{next_token}'): {e}. Defaulting to offset=0"
+            )
             offset = 0
     else:
         offset = 0

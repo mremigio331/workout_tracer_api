@@ -57,33 +57,49 @@ class UserProfileHelper:
         """
         Fetch a user profile from DynamoDB by user_id.
         Returns a dict with user_id, email, name, and public_profile.
+        Scans all pages if needed (handles LastEvaluatedKey).
         """
         try:
-            response = self.table.get_item(Key={"PK": f"USER#{user_id}", "SK": self.sk})
-            item = response.get("Item")
-            if item:
-                self.logger.info(f"Fetched user profile for {user_id}: {item}")
-                pk_value = item.get("PK", "")
-                user_id_value = (
-                    pk_value.replace("USER#", "")
-                    if pk_value.startswith("USER#")
-                    else pk_value
-                )
-                result = {
-                    "user_id": user_id_value,
-                    "email": item.get("email"),
-                    "name": item.get("name"),
-                    "public_profile": item.get("public_profile"),
-                    "created_at": item.get("created_at"),
-                    "beta_features": item.get("beta_features", []),
-                    "cached_map_location": item.get(
-                        "cached_map_location", (40.7831, -73.9712)
-                    ),
+            last_evaluated_key = None
+            while True:
+                scan_kwargs = {
+                    "FilterExpression": "PK = :pk AND SK = :sk",
+                    "ExpressionAttributeValues": {
+                        ":pk": f"USER#{user_id}",
+                        ":sk": self.sk,
+                    },
                 }
-                return result
-            else:
-                self.logger.info(f"No user profile found for {user_id}")
-                return None
+                if last_evaluated_key:
+                    scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
+                response = self.table.scan(**scan_kwargs)
+                items = response.get("Items", [])
+                if items:
+                    item = items[0]
+                    self.logger.info(f"Fetched user profile for {user_id}: {item}")
+                    pk_value = item.get("PK", "")
+                    user_id_value = (
+                        pk_value.replace("USER#", "")
+                        if pk_value.startswith("USER#")
+                        else pk_value
+                    )
+                    result = {
+                        "user_id": user_id_value,
+                        "email": item.get("email"),
+                        "name": item.get("name"),
+                        "public_profile": item.get("public_profile"),
+                        "created_at": item.get("created_at"),
+                        "beta_features": item.get("beta_features", []),
+                        "cached_map_location": item.get(
+                            "cached_map_location", (40.7831, -73.9712)
+                        ),
+                    }
+                    return result
+                last_evaluated_key = response.get("LastEvaluatedKey")
+                if not last_evaluated_key:
+                    self.logger.info(
+                        f"No user profile found for {user_id} after scanning all pages."
+                    )
+                    return None
         except ClientError as e:
             self.logger.error(f"Error fetching user profile for {user_id}: {e}")
             raise

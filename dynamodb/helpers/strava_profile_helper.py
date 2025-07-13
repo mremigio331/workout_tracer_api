@@ -272,25 +272,36 @@ class StravaProfileHelper:
         """
         Find the user_id for a given strava_id. Assumes 1-1 mapping.
         Handles DynamoDB attribute types in the result.
+        Loops through all pages if there is a next_token (LastEvaluatedKey).
         """
         try:
-            response = self.table.scan(
-                FilterExpression="strava_id = :sid AND SK = :sk",
-                ExpressionAttributeValues={
+            scan_kwargs = {
+                "FilterExpression": "strava_id = :sid AND SK = :sk",
+                "ExpressionAttributeValues": {
                     ":sid": int(strava_id),
                     ":sk": self.sk,
                 },
-                ProjectionExpression="user_id",
-            )
-            items = response.get("Items", [])
-            if items:
-                item = items[0]
-                if isinstance(item.get("user_id"), dict) and "S" in item["user_id"]:
-                    return item["user_id"]["S"]
-                return item.get("user_id")
-            else:
-                self.logger.warning(f"No user found for strava_id: {strava_id}")
-                return None
+                "ProjectionExpression": "user_id",
+            }
+            last_evaluated_key = None
+            while True:
+                if last_evaluated_key:
+                    scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
+                response = self.table.scan(**scan_kwargs)
+                items = response.get("Items", [])
+                if items:
+                    item = items[0]
+                    if isinstance(item.get("user_id"), dict) and "S" in item["user_id"]:
+                        return item["user_id"]["S"]
+                    return item.get("user_id")
+                last_evaluated_key = response.get("LastEvaluatedKey")
+                if not last_evaluated_key:
+                    self.logger.warning(f"No user found for strava_id: {strava_id}")
+                    return None
+                else:
+                    self.logger.info(
+                        f"Scan not complete, next_token: {last_evaluated_key}"
+                    )
         except ClientError as e:
             self.logger.error(
                 f"Error finding user_id by strava_id: {e.response['Error']['Message']}"

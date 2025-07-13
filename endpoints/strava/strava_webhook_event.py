@@ -41,6 +41,9 @@ def strava_webhook_event(payload: StravaWebhookEvent, request: Request):
     )
     logger.info(f"Received Strava webhook event: {payload.dict()}")
 
+    strava_id = payload.owner_id
+    logger.info(f"Strava ID from payload: {strava_id}")
+
     # Handle athlete events (no action, just return 200)
     if payload.object_type == "athlete":
         logger.info(
@@ -55,10 +58,17 @@ def strava_webhook_event(payload: StravaWebhookEvent, request: Request):
     if payload.object_type == "activity":
         strava_profile_helper = StravaProfileHelper(request_id=request.state.request_id)
         workout_helper = StravaWorkoutHelper(request_id=request.state.request_id)
-        user_id = strava_profile_helper.get_user_id_by_strava_id(payload.owner_id)
+        user_id = strava_profile_helper.get_user_id_by_strava_id(int(strava_id))
         workout_id = payload.object_id
 
+        logger.info(
+            f"Processing activity webhook: aspect_type={payload.aspect_type}, user_id={user_id}, workout_id={workout_id}"
+        )
+
         if payload.aspect_type == "delete":
+            logger.info(
+                f"Attempting to delete workout {workout_id} for user_id {user_id}"
+            )
             deleted = workout_helper.delete_strava_workout(user_id, workout_id)
             if deleted:
                 logger.info(
@@ -79,17 +89,17 @@ def strava_webhook_event(payload: StravaWebhookEvent, request: Request):
                     status_code=404,
                 )
         elif payload.aspect_type in ("create", "update"):
-            # Use get_full_activity_by_id to fetch the full activity from Strava
             logger.info(
                 f"Received {payload.aspect_type} for workout {workout_id} for user_id {user_id}: {payload.updates}"
             )
             try:
                 # Get user's Strava access token
-
+                logger.info(f"Fetching Strava credentials for user_id: {user_id}")
                 credentials_helper = StravaCredentialsHelper(
                     request_id=request.state.request_id
                 )
                 strava_credentials = credentials_helper.get_credentials(user_id=user_id)
+                logger.info(f"Strava credentials fetched: {bool(strava_credentials)}")
                 if not strava_credentials or "access_token" not in strava_credentials:
                     logger.error(f"Strava credentials not found for user_id: {user_id}")
                     return JSONResponse(
@@ -99,9 +109,18 @@ def strava_webhook_event(payload: StravaWebhookEvent, request: Request):
                         status_code=404,
                     )
                 access_token = strava_credentials["access_token"]
+                logger.info(
+                    f"Access token obtained for user_id {user_id}: {access_token[:6]}... (truncated)"
+                )
                 # Fetch full activity from Strava
+                logger.info(
+                    f"Fetching full activity from Strava for workout_id: {workout_id}"
+                )
                 activity = strava_client.get_full_activity_by_id(
                     access_token, workout_id
+                )
+                logger.info(
+                    f"Activity fetch result for workout_id {workout_id}: {'found' if activity else 'not found'}"
                 )
                 if not activity:
                     logger.error(
@@ -125,6 +144,9 @@ def strava_webhook_event(payload: StravaWebhookEvent, request: Request):
                 )
             try:
                 activity["id"] = workout_id
+                logger.info(
+                    f"Saving workout {workout_id} for user_id {user_id} to DynamoDB"
+                )
                 workout, action = workout_helper.put_strava_workout(user_id, activity)
                 logger.info(
                     f"{action.capitalize()}d Strava workout {workout_id} for user_id {user_id}"
@@ -134,6 +156,9 @@ def strava_webhook_event(payload: StravaWebhookEvent, request: Request):
                     "workout": StravaWorkoutHelper.serialize_model(workout),
                     "action": action,
                 }
+                logger.info(
+                    f"Returning response for workout {workout_id}: {response_data}"
+                )
                 return JSONResponse(
                     content=response_data,
                     status_code=200,

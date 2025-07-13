@@ -51,10 +51,13 @@ def delete_strava_webhook(stage="staging"):
 
     url = "https://www.strava.com/api/v3/push_subscriptions"
     print("Fetching current Strava webhook subscriptions...")
-    response = requests.get(url, params={
-        "client_id": STRAVA_CLIENT_ID,
-        "client_secret": STRAVA_CLIENT_SECRET,
-    })
+    response = requests.get(
+        url,
+        params={
+            "client_id": STRAVA_CLIENT_ID,
+            "client_secret": STRAVA_CLIENT_SECRET,
+        },
+    )
     print(f"Status: {response.status_code}")
     try:
         subs = response.json()
@@ -63,10 +66,13 @@ def delete_strava_webhook(stage="staging"):
             sub_id = sub.get("id")
             if sub_id:
                 print(f"Deleting subscription id: {sub_id}")
-                del_resp = requests.delete(f"{url}/{sub_id}", params={
-                    "client_id": STRAVA_CLIENT_ID,
-                    "client_secret": STRAVA_CLIENT_SECRET,
-                })
+                del_resp = requests.delete(
+                    f"{url}/{sub_id}",
+                    params={
+                        "client_id": STRAVA_CLIENT_ID,
+                        "client_secret": STRAVA_CLIENT_SECRET,
+                    },
+                )
                 print(f"Delete status: {del_resp.status_code}")
                 try:
                     print(del_resp.json())
@@ -78,7 +84,12 @@ def delete_strava_webhook(stage="staging"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Strava Webhook Registration Tool")
-    parser.add_argument("--stage", choices=["staging", "prod"], default="staging", help="Environment stage")
+    parser.add_argument(
+        "--stage",
+        choices=["staging", "prod"],
+        default="staging",
+        help="Environment stage",
+    )
     parser.add_argument("--create", action="store_true", help="Create/register webhook")
     parser.add_argument("--delete", action="store_true", help="Delete all webhooks")
     args = parser.parse_args()

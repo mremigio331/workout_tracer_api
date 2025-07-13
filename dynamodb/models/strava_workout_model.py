@@ -52,8 +52,8 @@ class SegmentEffortModel(BaseModel):
     device_watts: Optional[bool]
     average_watts: Optional[float] = None
     segment: Optional[SegmentModel]
-    kom_rank: Optional[int]
-    pr_rank: Optional[int]
+    kom_rank: Optional[int] = None  # <-- must be Optional with default None
+    pr_rank: Optional[int] = None
     achievements: Optional[List[Any]]
     hidden: Optional[bool]
 

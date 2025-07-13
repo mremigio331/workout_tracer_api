@@ -121,15 +121,41 @@ class StravaCredentialsHelper:
         """
         Retrieve and decrypt Strava credentials from DynamoDB.
         If expired or force_refresh is True, refresh using StravaClient and update DynamoDB.
+        Scans all pages if needed (handles LastEvaluatedKey).
         """
         try:
-            response = self.table.get_item(Key={"PK": f"USER#{user_id}", "SK": self.sk})
-            item = response.get("Item")
-            if not item:
-                self.logger.warning(
-                    f"No Strava credentials found for user_id: {user_id}"
-                )
-                return None
+            last_evaluated_key = None
+            while True:
+                if last_evaluated_key:
+                    response = self.table.scan(
+                        FilterExpression="PK = :pk AND SK = :sk",
+                        ExpressionAttributeValues={
+                            ":pk": f"USER#{user_id}",
+                            ":sk": self.sk,
+                        },
+                        ProjectionExpression="token_type,expires_at,expires_in,refresh_token,access_token",
+                        ExclusiveStartKey=last_evaluated_key,
+                    )
+                else:
+                    response = self.table.scan(
+                        FilterExpression="PK = :pk AND SK = :sk",
+                        ExpressionAttributeValues={
+                            ":pk": f"USER#{user_id}",
+                            ":sk": self.sk,
+                        },
+                        ProjectionExpression="token_type,expires_at,expires_in,refresh_token,access_token",
+                    )
+                items = response.get("Items", [])
+                if items:
+                    item = items[0]
+                    break
+                last_evaluated_key = response.get("LastEvaluatedKey")
+                if not last_evaluated_key:
+                    self.logger.warning(
+                        f"No Strava credentials found for user_id: {user_id} after scanning all pages."
+                    )
+                    return None
+
             decrypted = {
                 "token_type": item["token_type"],
                 "expires_at": item["expires_at"],
