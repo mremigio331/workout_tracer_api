@@ -296,3 +296,103 @@ class StravaClient:
             raise StravaAuthCodeExchangeError(
                 f"Error creating Strava push subscription: {e}"
             )
+
+    def get_athlete_activities_with_token(
+        self, access_token, per_page=200, next_token=None
+    ):
+        self.metrics.add_dimension(name="Endpoint", value="/api/v3/athlete/activities")
+        self.metrics.add_metric(name="StravaApiCall", unit=MetricUnit.Count, value=1)
+        self.logger.info(
+            f"Fetching athlete activities with per_page={per_page}, next_token={next_token}"
+        )
+        """
+        Fetches athlete activities with pagination support.
+        Returns a tuple: (all_activities, next_token)
+        """
+        url = "https://www.strava.com/api/v3/athlete/activities"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        }
+
+        all_activities = []
+        page = next_token if next_token is not None else 1
+        request_count = 0
+        max_requests = 100
+
+        params = {
+            "page": page,
+            "per_page": per_page,
+        }
+
+        self.logger.debug(f"Requesting page {page} with params: {params}")
+
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            request_count += 1
+
+            self.logger.debug(
+                f"Received response status: {response.status_code} for page {page}"
+            )
+
+            if response.status_code == 429:
+                self.logger.warning("Rate limit hit. Waiting 15 minutes...")
+                time.sleep(15 * 60)
+                return [], None
+
+            if not response.ok:
+                self.logger.error(
+                    f"Request failed (page {page}): {response.status_code}"
+                )
+                self.logger.error(response.text)
+                self.metrics.add_metric(
+                    name="StravaException", unit=MetricUnit.Count, value=1
+                )
+                self.metrics.flush_metrics()
+                return [], None
+
+            data = response.json()
+            self.logger.debug(f"Fetched {len(data)} activities on page {page}")
+
+            # Try to get total number of activities/pages from response headers
+            total_activities = None
+            total_pages = None
+            if "X-Total-Count" in response.headers:
+                try:
+                    total_activities = int(response.headers["X-Total-Count"])
+                    total_pages = (total_activities + per_page - 1) // per_page
+                    self.logger.info(
+                        f"Total activities reported by Strava: {total_activities}"
+                    )
+                    self.logger.info(f"Estimated total pages: {total_pages}")
+                except Exception as exc:
+                    self.logger.warning(f"Could not parse X-Total-Count: {exc}")
+
+            if not data:
+                self.logger.info(f"No activities found on page {page}.")
+                return [], None
+
+            all_activities.extend(data)
+
+            self.metrics.add_metric(
+                name="StravaSuccess", unit=MetricUnit.Count, value=1
+            )
+            self.metrics.flush_metrics()
+
+            if len(data) < per_page:
+                self.logger.info(f"Last page reached at page {page}.")
+                next_token = None
+            else:
+                next_token = page + 1
+
+        except requests.RequestException as e:
+            self.metrics.add_metric(
+                name="StravaException", unit=MetricUnit.Count, value=1
+            )
+            self.metrics.flush_metrics()
+            self.logger.error(f"Error fetching athlete activities: {e}")
+            raise StravaAuthCodeExchangeError(f"Error fetching athlete activities: {e}")
+
+        self.logger.info(f"Total activities fetched: {len(all_activities)}")
+        # Return total_pages as a third value if available
+        return all_activities, next_token, total_pages

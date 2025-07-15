@@ -4,6 +4,7 @@ from dynamodb.helpers.strava_credentials_helper import StravaCredentialsHelper
 from clients.strava_client import StravaClient, StravaAuthCodeExchangeError
 from dynamodb.models.strava_profile_model import StravaAthleteModel
 from dynamodb.models.strava_credentials_model import StravaCredentialsModel
+from aws_lambda_powertools.metrics import Metrics, MetricUnit
 import requests
 from datetime import datetime, timedelta
 import os
@@ -23,9 +24,29 @@ def get_valid_strava_credentials(user_id, request_id, logger):
     return strava_credentials
 
 
+def user_exists_in_cognito(user_id):
+    client = boto3.client("cognito-idp")
+    user_pool_id = os.getenv("COGNITO_USER_POOL_ID")
+    if not user_pool_id:
+        return False
+    try:
+        response = client.admin_get_user(UserPoolId=user_pool_id, Username=user_id)
+        return True
+    except client.exceptions.UserNotFoundException:
+        return False
+    except Exception as e:
+        logger.error(f"Error checking Cognito user existence: {e}")
+        return False
+
+
 def lambda_handler(event, context):
+    stage = os.getenv("STAGE")
     request_id = getattr(context, "aws_request_id", None)
     logger.append_keys(request_id=request_id)
+
+    metrics = Metrics(
+        namespace=f"WorkoutTracer-{stage}", service="workout_tracer_batch_update"
+    )
 
     max_messages = event.get("max_messages", 550) if isinstance(event, dict) else 550
 
@@ -55,6 +76,7 @@ def lambda_handler(event, context):
 
     processed = 0
     errors = 0
+    deleted_user_not_exist = 0
 
     for msg in messages:
         strava_client = None
@@ -63,6 +85,22 @@ def lambda_handler(event, context):
             user_id = body.get("user_id")
             workout_id = body.get("workout_id")
             logger.info(f"Processing user_id={user_id}, workout_id={workout_id}")
+
+            # Check if user exists in Cognito
+            if not user_exists_in_cognito(user_id):
+                logger.warning(
+                    f"User {user_id} does not exist in Cognito. Deleting message from SQS."
+                )
+                sqs.delete_message(
+                    QueueUrl=sqs_queue_url,
+                    ReceiptHandle=msg["ReceiptHandle"],
+                )
+                deleted_user_not_exist += 1
+                metrics.add_metric(
+                    name="UserNotExistDelete", unit=MetricUnit.Count, value=1
+                )
+                metrics.flush_metrics()
+                continue
 
             # Use the helper to get valid credentials
             credentials_helper = StravaCredentialsHelper(request_id=request_id)
@@ -75,6 +113,10 @@ def lambda_handler(event, context):
                     f"Strava credentials not found or could not be refreshed for user_id: {user_id}"
                 )
                 errors += 1
+                metrics.add_metric(
+                    name="PutWorkoutError", unit=MetricUnit.Count, value=1
+                )
+                metrics.flush_metrics()
                 continue
 
             strava_client = StravaClient(request_id=request_id)
@@ -85,6 +127,10 @@ def lambda_handler(event, context):
             if not workout_data:
                 logger.error(f"Failed to retrieve workout data for ID {workout_id}.")
                 errors += 1
+                metrics.add_metric(
+                    name="PutWorkoutError", unit=MetricUnit.Count, value=1
+                )
+                metrics.flush_metrics()
                 continue
 
             workout_helper = StravaWorkoutHelper(request_id=request_id)
@@ -94,6 +140,8 @@ def lambda_handler(event, context):
             logger.info(
                 f"Workout {workout_id} for user {user_id} stored with action: {action}"
             )
+            metrics.add_metric(name="PutWorkoutSuccess", unit=MetricUnit.Count, value=1)
+            metrics.flush_metrics()
 
             sqs.delete_message(
                 QueueUrl=sqs_queue_url,
@@ -106,10 +154,15 @@ def lambda_handler(event, context):
                 f"Error processing message for user_id={body.get('user_id', 'unknown')}, workout_id={body.get('workout_id', 'unknown')}: {e}"
             )
             errors += 1
+            metrics.add_metric(name="PutWorkoutError", unit=MetricUnit.Count, value=1)
+            metrics.flush_metrics()
 
-    logger.info(f"Processed: {processed}, Errors: {errors}")
+    logger.info(
+        f"Processed: {processed}, Errors: {errors}, DeletedUserNotExist: {deleted_user_not_exist}"
+    )
     return {
         "processed": processed,
         "errors": errors,
+        "deleted_user_not_exist": deleted_user_not_exist,
         "fetched_messages": len(messages),
     }
