@@ -45,7 +45,8 @@ def lambda_handler(event, context):
     logger.append_keys(request_id=request_id)
 
     metrics = Metrics(
-        namespace=f"WorkoutTracer-{stage}", service="workout_tracer_batch_update"
+        namespace=f"WorkoutTracer-{stage.capitalize()}",
+        service="workout_tracer_batch_update",
     )
 
     max_messages = event.get("max_messages", 550) if isinstance(event, dict) else 550
