@@ -75,7 +75,6 @@ class UserProfileHelper:
                 items = response.get("Items", [])
                 if items:
                     item = items[0]
-                    self.logger.info(f"Fetched user profile for {user_id}: {item}")
                     pk_value = item.get("PK", "")
                     user_id_value = (
                         pk_value.replace("USER#", "")

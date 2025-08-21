@@ -6,6 +6,8 @@ from dynamodb.helpers.strava_workout_helper import StravaWorkoutHelper
 from dynamodb.helpers.user_profile_helper import UserProfileHelper
 from dynamodb.helpers.strava_profile_helper import StravaProfileHelper
 import base64
+import json
+import urllib.parse
 
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
@@ -63,41 +65,59 @@ def get_public_strava_workouts(
 
     user_id = user_profile.get("user_id")
 
-    # Decode next_token to get offset
-    if next_token:
-        try:
-            offset = int(base64.urlsafe_b64decode(next_token.encode()).decode())
-        except Exception:
-            logger.warning("Invalid next_token provided, defaulting to offset=0")
-            offset = 0
-    else:
-        offset = 0
-
     workout_helper = StravaWorkoutHelper(request_id=request.state.request_id)
-    logger.info(f"Fetching all workouts for user_id={user_id}")
-    all_workouts = workout_helper.get_all_workouts(user_id=user_id)
-    total = len(all_workouts)
-    logger.info(f"Total workouts found for user_id={user_id}: {total}")
-    paginated = all_workouts[offset : offset + limit]
-    logger.info(
-        f"Returning workouts {offset} to {offset + len(paginated)} for user_id={user_id}"
-    )
+    logger.info(f"Fetching workouts for user_id={user_id}")
 
-    # Prepare next_token if there are more results
-    if offset + limit < total:
-        new_next_token = base64.urlsafe_b64encode(str(offset + limit).encode()).decode()
-        logger.info(f"Next query: /workouts?limit={limit}&next_token={new_next_token}")
+    dynamo_next_token = None
+    if next_token:
+        logger.info(f"Raw incoming next_token: {next_token}")
+        try:
+            # Decode from URL encoding first
+            decoded_url_token = urllib.parse.unquote(next_token)
+            decoded_token = base64.urlsafe_b64decode(
+                decoded_url_token.encode()
+            ).decode()
+            dynamo_next_token = json.loads(decoded_token)
+            logger.info(f"Decoded next_token: {dynamo_next_token}")
+        except Exception as e:
+            logger.warning(
+                f"Invalid next_token provided, defaulting to None. Exception: {e}"
+            )
+            dynamo_next_token = None
+
+    result = workout_helper.get_all_workouts(
+        user_id=user_id, limit=limit, next_token=dynamo_next_token
+    )
+    workouts = result.get("workouts", [])
+    returned_next_token = result.get("next_token")
+
+    # Debug log for returned_next_token
+    logger.info(f"Returned next_token from DynamoDB: {returned_next_token}")
+
+    if returned_next_token:
+        if isinstance(returned_next_token, dict):
+            new_next_token = base64.urlsafe_b64encode(
+                json.dumps(returned_next_token).encode()
+            ).decode()
+        else:
+            logger.warning(f"Returned next_token is not a dict: {returned_next_token}")
+            new_next_token = None
+        if next_token and new_next_token == next_token:
+            new_next_token = None
+            logger.info("Next token unchanged, stopping pagination.")
+        else:
+            logger.info(
+                f"Next query: /workouts?limit={limit}&next_token={new_next_token}"
+            )
     else:
         new_next_token = None
         logger.info("No new token, this is the last page.")
 
     return JSONResponse(
         content={
-            "total": total,
             "limit": limit,
-            "offset": offset,
             "next_token": new_next_token,
-            "workouts": paginated,
+            "workouts": workouts,
         },
         status_code=200,
     )

@@ -242,8 +242,8 @@ class StravaProfileHelper:
     def get_user_id_by_strava_id(self, strava_id: int) -> str | None:
         """
         Find the user_id for a given strava_id. Assumes 1-1 mapping.
-        Handles DynamoDB attribute types in the result.
-        Loops through all pages if there is a next_token (LastEvaluatedKey).
+        Uses DynamoDB Scan and extracts user_id from DynamoDB attribute types.
+        Returns the user_id if found, otherwise None.
         """
         try:
             scan_kwargs = {
@@ -262,17 +262,17 @@ class StravaProfileHelper:
                 items = response.get("Items", [])
                 if items:
                     item = items[0]
-                    if isinstance(item.get("user_id"), dict) and "S" in item["user_id"]:
-                        return item["user_id"]["S"]
-                    return item.get("user_id")
+                    user_id = item.get("user_id")
+                    # DynamoDB returns attribute types, so extract the string value
+                    if isinstance(user_id, dict) and "S" in user_id:
+                        return user_id["S"]
+                    elif isinstance(user_id, str):
+                        return user_id
                 last_evaluated_key = response.get("LastEvaluatedKey")
                 if not last_evaluated_key:
-                    self.logger.warning(f"No user found for strava_id: {strava_id}")
-                    return None
-                else:
-                    self.logger.info(
-                        f"Scan not complete, next_token: {last_evaluated_key}"
-                    )
+                    break
+            self.logger.warning(f"No user found for strava_id: {strava_id}")
+            return None
         except ClientError as e:
             self.logger.error(
                 f"Error finding user_id by strava_id: {e.response['Error']['Message']}"

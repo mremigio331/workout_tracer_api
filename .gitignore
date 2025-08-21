@@ -1,6 +1,6 @@
 layer/
 __pycache__/
 *.cpython-*
-lambda_layer.zip
+*.zip
 .DS
 *.pyc

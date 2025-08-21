@@ -108,7 +108,7 @@ class StravaWorkoutHelper:
                 KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(
                     f"USER#{user_id}"
                 )
-                & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk)
+                & boto3.dynamodb.conditions.Key("SK").begins_with(f"{self.sk}#")
             )
             items = response.get("Items", [])
             return [int(item["SK"].split("#")[-1]) for item in items if "SK" in item]
@@ -123,40 +123,58 @@ class StravaWorkoutHelper:
             )
             return []
 
-    def get_all_workouts(self, user_id: str) -> List[Dict[str, Any]]:
+    def get_all_workouts(
+        self, user_id: str, limit: int = 500, next_token: dict = None
+    ) -> dict:
         """
-        Retrieve all Strava workouts for a user.
-        Returns a list of workout dicts.
+        Retrieve up to 'limit' Strava workouts for a user.
+        Returns a dict: { "workouts": [...], "next_token": ... }
+        If DynamoDB returns a LastEvaluatedKey, it is returned as next_token.
         """
         try:
-            response = self.table.query(
-                KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(
+            query_kwargs = {
+                "KeyConditionExpression": boto3.dynamodb.conditions.Key("PK").eq(
                     f"USER#{user_id}"
                 )
-                & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk)
-            )
+                & boto3.dynamodb.conditions.Key("SK").begins_with(f"{self.sk}#"),
+                "Limit": limit,
+            }
+            if next_token:
+                query_kwargs["ExclusiveStartKey"] = next_token
+
+            response = self.table.query(**query_kwargs)
             items = response.get("Items", [])
-            while "LastEvaluatedKey" in response:
-                response = self.table.query(
-                    KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(
-                        f"USER#{user_id}"
-                    )
-                    & boto3.dynamodb.conditions.Key("SK").begins_with(self.sk),
-                    ExclusiveStartKey=response["LastEvaluatedKey"],
-                )
-                items.extend(response.get("Items", []))
             workouts = [self._decimals_to_floats(item) for item in items]
-            return workouts
+            result = {"workouts": workouts}
+            last_evaluated_key = response.get("LastEvaluatedKey")
+
+            # Debug logging
+            self.logger.debug(f"ExclusiveStartKey: {next_token}")
+            self.logger.debug(f"LastEvaluatedKey: {last_evaluated_key}")
+
+            # Only return next_token if there are items AND a LastEvaluatedKey
+            if items and last_evaluated_key:
+                # Guard: If LastEvaluatedKey is same as ExclusiveStartKey, break loop
+                if next_token and last_evaluated_key == next_token:
+                    self.logger.warning(
+                        "LastEvaluatedKey is same as ExclusiveStartKey, breaking pagination loop."
+                    )
+                    result["next_token"] = None
+                else:
+                    result["next_token"] = last_evaluated_key
+            else:
+                result["next_token"] = None
+            return result
         except ClientError as e:
             self.logger.error(
                 f"Error retrieving all Strava workouts for user_id {user_id}: {e}"
             )
-            return []
+            return {"workouts": [], "next_token": None}
         except Exception as e:
             self.logger.error(
                 f"Unexpected error in get_all_workouts for user_id: {user_id}: {e}"
             )
-            return []
+            return {"workouts": [], "next_token": None}
 
     def delete_strava_workout(self, user_id: str, workout_id: int) -> bool:
         """

@@ -4,6 +4,8 @@ from aws_lambda_powertools import Logger
 from decorators.exceptions_decorator import exceptions_decorator
 from dynamodb.helpers.strava_workout_helper import StravaWorkoutHelper
 import base64
+import json
+import urllib.parse
 
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
@@ -32,32 +34,33 @@ def get_strava_workouts(
             content={"error": "User ID not found in request."}, status_code=400
         )
 
-    # Decode next_token to get offset
+    workout_helper = StravaWorkoutHelper(request_id=request.state.request_id)
+
+    # Use DynamoDB pagination with next_token
+    dynamo_next_token = None
     if next_token:
         try:
-            # Defensive: decode and strip whitespace, ensure int
-            offset = int(base64.urlsafe_b64decode(next_token.encode()).decode().strip())
+            # Decode from URL encoding first
+            decoded_url_token = urllib.parse.unquote(next_token)
+            dynamo_next_token = json.loads(
+                base64.urlsafe_b64decode(decoded_url_token.encode()).decode()
+            )
         except Exception as e:
             logger.warning(
-                f"Invalid next_token provided ('{next_token}'): {e}. Defaulting to offset=0"
+                f"Invalid next_token provided ('{next_token}'): {e}. Defaulting to None"
             )
-            offset = 0
-    else:
-        offset = 0
+            dynamo_next_token = None
 
-    workout_helper = StravaWorkoutHelper(request_id=request.state.request_id)
-    logger.info(f"Fetching all workouts for user_id={user_id}")
-    all_workouts = workout_helper.get_all_workouts(user_id=user_id)
-    total = len(all_workouts)
-    logger.info(f"Total workouts found for user_id={user_id}: {total}")
-    paginated = all_workouts[offset : offset + limit]
-    logger.info(
-        f"Returning workouts {offset} to {offset + len(paginated)} for user_id={user_id}"
+    result = workout_helper.get_all_workouts(
+        user_id=user_id, limit=limit, next_token=dynamo_next_token
     )
+    workouts = result.get("workouts", [])
+    returned_next_token = result.get("next_token")
 
-    # Prepare next_token if there are more results
-    if offset + limit < total:
-        new_next_token = base64.urlsafe_b64encode(str(offset + limit).encode()).decode()
+    if returned_next_token:
+        new_next_token = base64.urlsafe_b64encode(
+            json.dumps(returned_next_token).encode()
+        ).decode()
         logger.info(f"Next query: /workouts?limit={limit}&next_token={new_next_token}")
     else:
         new_next_token = None
@@ -65,11 +68,9 @@ def get_strava_workouts(
 
     return JSONResponse(
         content={
-            "total": total,
             "limit": limit,
-            "offset": offset,
             "next_token": new_next_token,
-            "workouts": paginated,
+            "workouts": workouts,
         },
         status_code=200,
     )
