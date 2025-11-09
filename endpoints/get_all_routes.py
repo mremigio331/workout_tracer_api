@@ -60,6 +60,6 @@ def get_all_routes(app):
         get_public_strava_profile.router, prefix="/strava", tags=["Strava"]
     )
 
-    app.include_router(miles_for_manny.router, prefix="", tags=["Strava"])
+    app.include_router(miles_for_manny.router, prefix="/strava", tags=["Strava"])
 
     return app
