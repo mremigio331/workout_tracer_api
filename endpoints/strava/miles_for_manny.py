@@ -88,6 +88,14 @@ def miles_for_manny(
     # Only return workout type, distance info, and map data
     scrubbed_workouts = []
     for workout in workouts:
+        # Ignore workouts without a non-empty summary_polyline
+        summary_polyline = (
+            workout.get("map", {}).get("summary_polyline")
+            if workout.get("map")
+            else None
+        )
+        if not summary_polyline:
+            continue
         scrubbed_workout = {
             "type": workout.get("type"),
             "sport_type": workout.get("sport_type"),

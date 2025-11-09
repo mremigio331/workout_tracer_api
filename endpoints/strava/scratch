@@ -1,0 +1,19 @@
+# Example curl command to POST to the /strava/webhook endpoint
+
+curl -X POST "http://localhost:5000//strava/webhook" \ -H "Content-Type: application/json" \ -H "Accept: application/json" \ -d '{ "aspect_type": "update", "event_time": 1751896594, "object_id": 43992467, "object_type": "activity", "owner_id": 43992467, "subscription_id": 0, "updates": {}}'
+
+
+  # Example curl command to POST to the /strava/webhook endpoint
+
+curl -X POST "https://api.workouttracer.com/strava/webhook" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "aspect_type": "update",
+    "event_time": 1751896594,
+    "object_id": 43992467,
+    "object_type": "activity",
+    "owner_id": 43992467,
+    "subscription_id": 0,
+    "updates": {}
+  }'
