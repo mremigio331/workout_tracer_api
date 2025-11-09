@@ -16,6 +16,7 @@ from endpoints.strava import (
     strava_webhook_event,
     get_public_strava_workouts,
     get_public_strava_profile,
+    miles_for_manny,
 )
 
 
@@ -58,5 +59,7 @@ def get_all_routes(app):
     app.include_router(
         get_public_strava_profile.router, prefix="/strava", tags=["Strava"]
     )
+
+    app.include_router(miles_for_manny.router, prefix="", tags=["Strava"])
 
     return app
