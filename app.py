@@ -24,9 +24,20 @@ app = FastAPI(
 
 stage = os.getenv("STAGE", "").lower()
 if stage == "prod":
-    allowed_origins = ["https://workouttracer.com", "https://www.miles4manny.com"]
+    allowed_origins = [
+        "https://workouttracer.com",
+        "https://miles4manny.com",
+        "https://www.miles4manny.com",
+    ]
+elif stage == "staging":
+    allowed_origins = [
+        "https://staging.workouttracer.com",
+        "https://staging.miles4manny.com",
+        "http://localhost:3000",
+        "http://localhost:8080",
+    ]
 else:
-    allowed_origins = ["*"]
+    allowed_origins = ["http://localhost:3000", "http://localhost:8080"]
 
 app.add_middleware(CognitoAuthMiddleware)
 app.add_middleware(RequestIdMiddleware)
