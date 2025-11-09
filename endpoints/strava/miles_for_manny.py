@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.get(
-    "/miles4many",
+    "/miles4manny",
     summary="Get all Manny's workouts",
     response_description="Paginated list of Strava workouts",
 )
