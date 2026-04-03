@@ -17,6 +17,9 @@ from endpoints.strava import (
     get_public_strava_workouts,
     get_public_strava_profile,
     miles_for_manny,
+    miles_for_manny_stats,
+    get_workout_locations,
+    get_public_workout_locations,
 )
 
 
@@ -61,5 +64,10 @@ def get_all_routes(app):
     )
 
     app.include_router(miles_for_manny.router, prefix="/strava", tags=["Strava"])
+    app.include_router(miles_for_manny_stats.router, prefix="/strava", tags=["Strava"])
+    app.include_router(get_workout_locations.router, prefix="/strava", tags=["Strava"])
+    app.include_router(
+        get_public_workout_locations.router, prefix="/strava", tags=["Strava"]
+    )
 
     return app

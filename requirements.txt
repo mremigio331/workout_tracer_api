@@ -5,7 +5,4 @@ httpx
 mangum
 pydantic[email]
 requests
-uvicorn
-fpdf
 pytz
-reportlab

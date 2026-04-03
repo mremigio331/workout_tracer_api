@@ -114,6 +114,11 @@ class HighlightedKudoserModel(BaseModel):
     show_name: Optional[bool] = None
 
 
+class WorkoutLocations(BaseModel):
+    states: Dict[str, bool] = Field(default_factory=dict)
+    countries: Dict[str, bool] = Field(default_factory=dict)
+
+
 class StravaWorkoutModel(BaseModel):
     resource_state: Optional[int] = None
     athlete: Optional[StravaAthleteModel] = None
@@ -191,3 +196,4 @@ class StravaWorkoutModel(BaseModel):
     prefer_perceived_exertion: Optional[Any] = None
     stats_visibility: Optional[List[Dict[str, Any]]] = None
     available_zones: Optional[List[str]] = None
+    locations: WorkoutLocations = Field(default_factory=WorkoutLocations)

@@ -3,10 +3,17 @@ import boto3
 from botocore.exceptions import ClientError
 from dynamodb.models.strava_workout_model import StravaWorkoutModel
 import os
+import re
 from decimal import Decimal
 from datetime import datetime
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Tuple
 from constants.general import SERVICE_NAME
+from constants.countries import COUNTRIES
+
+# Module-level cache for parsed KML geometries — survives across warm invocations
+_KML_GEOMETRY_CACHE: Dict[str, Tuple[List[str], Any]] = (
+    {}
+)  # kml_file -> (names, STRtree)
 
 
 class StravaWorkoutHelper:
@@ -22,6 +29,7 @@ class StravaWorkoutHelper:
         if request_id:
             self.logger.append_keys(request_id=request_id)
         self.sk = "STRAVA_WORKOUT"
+        self._kml_cache: Dict[str, bytes] = {}
 
     def put_strava_workout(
         self, user_id: int, workout_data: dict
@@ -56,6 +64,24 @@ class StravaWorkoutHelper:
             self.logger.debug(
                 f"Sucessfully Put Strava workout {workout_id} for {user_id}"
             )
+
+            enrich_sqs_url = os.getenv("ENRICH_SQS_QUEUE_URL")
+            if enrich_sqs_url:
+                try:
+                    import json
+
+                    boto3.client("sqs").send_message(
+                        QueueUrl=enrich_sqs_url,
+                        MessageBody=json.dumps(
+                            {"user_id": user_id, "workout_id": workout_id}
+                        ),
+                        MessageGroupId=str(user_id),
+                    )
+                except Exception as e:
+                    self.logger.error(
+                        f"Failed to enqueue workout {workout_id} for enrichment: {e}"
+                    )
+
             return workout, action
         except ClientError as e:
             self.logger.error(f"Error putting Strava workout for {user_id}: {e}")
@@ -104,14 +130,26 @@ class StravaWorkoutHelper:
         Returns a list of workout IDs.
         """
         try:
-            response = self.table.query(
-                KeyConditionExpression=boto3.dynamodb.conditions.Key("PK").eq(
+            ids = []
+            query_kwargs = {
+                "KeyConditionExpression": boto3.dynamodb.conditions.Key("PK").eq(
                     f"USER#{user_id}"
                 )
-                & boto3.dynamodb.conditions.Key("SK").begins_with(f"{self.sk}#")
-            )
-            items = response.get("Items", [])
-            return [int(item["SK"].split("#")[-1]) for item in items if "SK" in item]
+                & boto3.dynamodb.conditions.Key("SK").begins_with(f"{self.sk}#"),
+                "ProjectionExpression": "SK",
+            }
+            while True:
+                response = self.table.query(**query_kwargs)
+                ids.extend(
+                    int(item["SK"].split("#")[-1])
+                    for item in response.get("Items", [])
+                    if "SK" in item
+                )
+                last_key = response.get("LastEvaluatedKey")
+                if not last_key:
+                    break
+                query_kwargs["ExclusiveStartKey"] = last_key
+            return ids
         except ClientError as e:
             self.logger.error(
                 f"Error retrieving all Strava workout IDs for user_id {user_id}: {e}"
@@ -123,13 +161,81 @@ class StravaWorkoutHelper:
             )
             return []
 
+    def get_all_workout_locations(self, user_id: str) -> dict:
+        """
+        Returns a summary of all locations a user has worked out in, broken down
+        by sport type and total count.
+
+        Example:
+        {
+            "locations": {
+                "countries": {
+                    "United States of America": {"Run": 23, "Walk": 5, "total": 28}
+                },
+                "states": {
+                    "Washington": {"Run": 23, "Walk": 5, "total": 28}
+                }
+            }
+        }
+        """
+        try:
+            summary: Dict[str, Dict[str, Dict[str, int]]] = {
+                "countries": {},
+                "states": {},
+            }
+            next_token = None
+            while True:
+                result = self.get_all_workouts(
+                    user_id,
+                    next_token=next_token,
+                    projection_expression="#loc, sport_type",
+                    expression_attribute_names={"#loc": "locations"},
+                )
+                for workout in result.get("workouts", []):
+                    sport_type = workout.get("sport_type") or "Unknown"
+                    locations = workout.get("locations") or {}
+                    for location_type in ("states", "countries"):
+                        for name, visited in (
+                            locations.get(location_type) or {}
+                        ).items():
+                            if not visited:
+                                continue
+                            entry = summary[location_type].setdefault(
+                                name, {"total": 0}
+                            )
+                            entry[sport_type] = entry.get(sport_type, 0) + 1
+                            entry["total"] += 1
+
+                next_token = result.get("next_token")
+                if not next_token:
+                    break
+
+            return {"locations": summary}
+        except ClientError as e:
+            self.logger.error(
+                f"Error retrieving workout locations for user_id {user_id}: {e}"
+            )
+            return {"locations": {"countries": {}, "states": {}}}
+        except Exception as e:
+            self.logger.error(
+                f"Unexpected error in get_all_workout_locations for user_id: {user_id}: {e}"
+            )
+            return {"locations": {"countries": {}, "states": {}}}
+
     def get_all_workouts(
-        self, user_id: str, limit: int = 500, next_token: dict = None
+        self,
+        user_id: str,
+        limit: int = 500,
+        next_token: dict = None,
+        projection_expression: str = None,
+        expression_attribute_names: dict = None,
     ) -> dict:
         """
         Retrieve up to 'limit' Strava workouts for a user.
         Returns a dict: { "workouts": [...], "next_token": ... }
         If DynamoDB returns a LastEvaluatedKey, it is returned as next_token.
+        Optional projection_expression and expression_attribute_names can be
+        passed to fetch only specific fields.
         """
         try:
             query_kwargs = {
@@ -141,6 +247,10 @@ class StravaWorkoutHelper:
             }
             if next_token:
                 query_kwargs["ExclusiveStartKey"] = next_token
+            if projection_expression:
+                query_kwargs["ProjectionExpression"] = projection_expression
+            if expression_attribute_names:
+                query_kwargs["ExpressionAttributeNames"] = expression_attribute_names
 
             response = self.table.query(**query_kwargs)
             items = response.get("Items", [])
@@ -199,6 +309,114 @@ class StravaWorkoutHelper:
         except ClientError as e:
             self.logger.error(
                 f"Error deleting Strava workout for user_id {user_id}, workout_id {workout_id}: {e}"
+            )
+            return False
+
+    def get_location_badges(
+        self, workout_polyline: str, kml_file_name: str
+    ) -> Dict[str, bool]:
+        """
+        Given an encoded polyline and a KML file name in S3, returns a dict
+        mapping each location name to True/False based on route intersection.
+        Uses an STRtree spatial index so only candidate polygons whose bounding
+        boxes overlap the route are checked precisely.
+        KML bytes are cached on the instance to avoid redundant S3 fetches within
+        the same Lambda invocation.
+        """
+        import polyline as polyline_lib
+        from lxml import etree
+        from shapely.geometry import LineString, Polygon
+        from shapely.ops import unary_union
+        from shapely.strtree import STRtree
+
+        try:
+            if kml_file_name not in _KML_GEOMETRY_CACHE:
+                self.logger.info(f"Building geometry index for {kml_file_name} (cold)")
+                if kml_file_name not in self._kml_cache:
+                    s3 = boto3.client("s3", region_name="us-west-2")
+                    bucket = "workout-tracer-kml-files-851753231474-us-west-2-an"
+                    self._kml_cache[kml_file_name] = s3.get_object(
+                        Bucket=bucket, Key=kml_file_name
+                    )["Body"].read()
+
+                xml_tree = etree.fromstring(self._kml_cache[kml_file_name])
+                ns = {"kml": "http://www.opengis.net/kml/2.2"}
+                names = []
+                geometries = []
+                for placemark in xml_tree.findall(".//kml:Placemark", ns):
+                    raw_name = placemark.findtext("kml:name", namespaces=ns)
+                    name = re.sub(r"<[^>]+>", "", raw_name).strip()
+                    if name in COUNTRIES:
+                        name = COUNTRIES[name]
+                    polys = []
+                    for coord_el in placemark.findall(".//kml:coordinates", ns):
+                        pts = [
+                            (float(x), float(y))
+                            for x, y, *_ in (
+                                c.split(",") for c in coord_el.text.strip().split()
+                            )
+                        ]
+                        if len(pts) >= 3:
+                            polys.append(Polygon(pts))
+                    if polys:
+                        names.append(name)
+                        geometries.append(unary_union(polys))
+
+                _KML_GEOMETRY_CACHE[kml_file_name] = (names, STRtree(geometries))
+                self.logger.info(
+                    f"Geometry index built for {kml_file_name}: {len(names)} regions"
+                )
+            else:
+                self.logger.info(
+                    f"Using cached geometry index for {kml_file_name} (warm)"
+                )
+
+            names, spatial_index = _KML_GEOMETRY_CACHE[kml_file_name]
+            coords = polyline_lib.decode(workout_polyline)
+            line = LineString([(lon, lat) for lat, lon in coords])
+
+            results = {name: False for name in names}
+            for idx in spatial_index.query(line, predicate="intersects"):
+                results[names[idx]] = True
+
+            matched = [name for name, hit in results.items() if hit]
+            self.logger.info(
+                f"Location badges matched for kml_file={kml_file_name}: {matched}"
+            )
+            return results
+        except Exception as e:
+            self.logger.error(
+                f"Error in get_location_badges for kml_file={kml_file_name}: {e}"
+            )
+            return {}
+
+    def update_workout_locations(
+        self, user_id: str, workout_id: int, locations: dict
+    ) -> bool:
+        """
+        Updates only the `locations` field on a stored workout in DynamoDB.
+        `locations` should be a dict like {"states": {...}, "countries": {...}}.
+        """
+        sk = f"{self.sk}#{workout_id}"
+        try:
+            self.table.update_item(
+                Key={"PK": f"USER#{user_id}", "SK": sk},
+                UpdateExpression="SET #loc = :locations",
+                ExpressionAttributeNames={"#loc": "locations"},
+                ExpressionAttributeValues={":locations": locations},
+            )
+            self.logger.info(
+                f"Updated locations for workout {workout_id}, user {user_id}"
+            )
+            return True
+        except ClientError as e:
+            self.logger.error(
+                f"Error updating locations for workout {workout_id}, user {user_id}: {e}"
+            )
+            return False
+        except Exception as e:
+            self.logger.error(
+                f"Unexpected error updating locations for workout {workout_id}, user {user_id}: {e}"
             )
             return False
 

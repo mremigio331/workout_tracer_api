@@ -177,6 +177,35 @@ class UserProfileHelper:
             self.logger.error(f"Error updating user profile fields for {user_id}: {e}")
             raise
 
+    def get_all_user_ids(self) -> list[str]:
+        """
+        Scan DynamoDB for all unique user IDs that have at least one Strava workout.
+        Returns a list of user ID strings (without the USER# prefix).
+        """
+        user_ids = set()
+        scan_kwargs = {
+            "FilterExpression": boto3.dynamodb.conditions.Attr("PK").begins_with(
+                "USER#"
+            )
+            & boto3.dynamodb.conditions.Attr("SK").begins_with("STRAVA_WORKOUT#"),
+            "ProjectionExpression": "PK",
+        }
+        try:
+            while True:
+                response = self.table.scan(**scan_kwargs)
+                for item in response.get("Items", []):
+                    pk = item.get("PK", "")
+                    if pk.startswith("USER#"):
+                        user_ids.add(pk[len("USER#") :])
+                last_key = response.get("LastEvaluatedKey")
+                if not last_key:
+                    break
+                scan_kwargs["ExclusiveStartKey"] = last_key
+        except ClientError as e:
+            self.logger.error(f"Error scanning for all user IDs: {e}")
+            raise
+        return list(user_ids)
+
     def get_public_profiles(self):
         """
         Return all user profiles where public_profile == True.

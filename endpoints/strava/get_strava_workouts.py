@@ -51,8 +51,23 @@ def get_strava_workouts(
             )
             dynamo_next_token = None
 
+    # Only fetch fields needed by the website — avoids returning heavy nested
+    # objects like segment_efforts, splits_metric/standard, laps, photos, etc.
+    # "name", "type", and "map" are DynamoDB reserved words so they need aliases.
     result = workout_helper.get_all_workouts(
-        user_id=user_id, limit=limit, next_token=dynamo_next_token
+        user_id=user_id,
+        limit=limit,
+        next_token=dynamo_next_token,
+        projection_expression=(
+            "id, #n, #t, sport_type, start_date, start_date_local, "
+            "distance, total_elevation_gain, moving_time, elapsed_time, "
+            "kilojoules, #m, locations"
+        ),
+        expression_attribute_names={
+            "#n": "name",
+            "#t": "type",
+            "#m": "map",
+        },
     )
     workouts = result.get("workouts", [])
     returned_next_token = result.get("next_token")
