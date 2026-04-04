@@ -2,5 +2,8 @@ layer/
 __pycache__/
 *.cpython-*
 *.zip
-.DS
+.DS*
 *.pyc
+*ipynb*
+*.kml
+*.kmz
