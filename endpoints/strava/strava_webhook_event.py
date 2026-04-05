@@ -151,18 +151,6 @@ def strava_webhook_event(payload: StravaWebhookEvent, request: Request):
                 logger.info(
                     f"{action.capitalize()}d Strava workout {workout_id} for user_id {user_id}"
                 )
-                response_data = {
-                    "message": f"Workout {workout_id} {action}d for user {user_id}.",
-                    "workout": StravaWorkoutHelper.serialize_model(workout),
-                    "action": action,
-                }
-                logger.info(
-                    f"Returning response for workout {workout_id}: {response_data}"
-                )
-                return JSONResponse(
-                    content=response_data,
-                    status_code=200,
-                )
             except Exception as e:
                 logger.error(
                     f"Failed to {payload.aspect_type} workout {workout_id} for user {user_id}: {e}"
@@ -173,6 +161,39 @@ def strava_webhook_event(payload: StravaWebhookEvent, request: Request):
                     },
                     status_code=500,
                 )
+
+            try:
+                enrich_sqs_url = os.getenv("ENRICH_SQS_QUEUE_URL")
+                if enrich_sqs_url:
+                    boto3.client("sqs").send_message(
+                        QueueUrl=enrich_sqs_url,
+                        MessageBody=json.dumps(
+                            {"user_id": user_id, "workout_id": workout_id}
+                        ),
+                        MessageGroupId=str(user_id),
+                    )
+                    logger.info(
+                        f"Enqueued workout {workout_id} for user {user_id} to enrich queue"
+                    )
+                else:
+                    logger.warning(
+                        "ENRICH_SQS_QUEUE_URL not set, skipping enrich enqueue"
+                    )
+            except Exception as e:
+                logger.error(
+                    f"Failed to enqueue workout {workout_id} for enrichment: {e}"
+                )
+
+            response_data = {
+                "message": f"Workout {workout_id} {action}d for user {user_id}.",
+                "workout": StravaWorkoutHelper.serialize_model(workout),
+                "action": action,
+            }
+            logger.info(f"Returning response for workout {workout_id}: {response_data}")
+            return JSONResponse(
+                content=response_data,
+                status_code=200,
+            )
         else:
             # Handle other aspect_types if needed
             logger.info(f"Unhandled aspect_type: {payload.aspect_type}")

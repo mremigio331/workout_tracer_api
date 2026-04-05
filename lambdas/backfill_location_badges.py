@@ -84,6 +84,7 @@ def _enqueue_workouts(workout_helper, sqs, enrich_sqs_url, user_id):
             workout_id = workout.get("id")
             if workout_id is None:
                 continue
+            workout_id = int(workout_id)
             total += 1
             try:
                 sqs.send_message(

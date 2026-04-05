@@ -454,7 +454,7 @@ class StravaWorkoutHelper:
         elif isinstance(obj, list):
             return [StravaWorkoutHelper._decimals_to_floats(v) for v in obj]
         elif isinstance(obj, Decimal):
-            return float(obj)
+            return int(obj) if obj % 1 == 0 else float(obj)
         else:
             return obj
 

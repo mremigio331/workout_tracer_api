@@ -54,7 +54,7 @@ def lambda_handler(event, context):
         for record in records:
             body = json.loads(record["body"])
             user_id = body.get("user_id")
-            workout_id = body.get("workout_id")
+            workout_id = int(body.get("workout_id"))
             if not user_id or not workout_id:
                 logger.error(
                     f"Missing user_id or workout_id in SQS record: {record['messageId']}"
@@ -75,7 +75,7 @@ def lambda_handler(event, context):
 
     # Direct invocation (backward compat)
     user_id = event.get("user_id")
-    workout_id = event.get("workout_id")
+    workout_id = int(event.get("workout_id"))
     if not user_id or not workout_id:
         logger.error("Missing user_id or workout_id in event.")
         return {"error": "user_id and workout_id are required."}
