@@ -23,18 +23,66 @@ class UserProfileHelper:
         self.audit_sk = "USER_PROFILE_AUDIT"
         self.audit_action_helper = AuditActionHelper(request_id=request_id)
 
-    def create_user_profile(self, user_id: str, email: str, name: str):
+    def get_user_by_display_id(self, display_id: int) -> dict | None:
+        """Look up a user profile by user_display_id via GSI. Returns the profile dict or None."""
+        try:
+            response = self.table.query(
+                IndexName="UserDisplayIdIndex",
+                KeyConditionExpression=boto3.dynamodb.conditions.Key(
+                    "user_display_id"
+                ).eq(display_id),
+                Limit=1,
+            )
+            items = response.get("Items", [])
+            if items:
+                item = items[0]
+                pk_value = item.get("PK", "")
+                user_id_value = (
+                    pk_value.replace("USER#", "")
+                    if pk_value.startswith("USER#")
+                    else pk_value
+                )
+                return {
+                    "user_id": user_id_value,
+                    "name": item.get("name"),
+                    "email": item.get("email"),
+                    "public_profile": item.get("public_profile"),
+                    "user_display_id": item.get("user_display_id"),
+                    "distance_unit": item.get("distance_unit", "Imperial"),
+                    "created_at": item.get("created_at"),
+                }
+            return None
+        except ClientError as e:
+            self.logger.error(f"Error looking up user by display_id {display_id}: {e}")
+            return None
+
+    def create_user_profile(
+        self, user_id: str, email: str, name: str, provider: str = "Cognito"
+    ):
         """
         Create a new user profile in DynamoDB.
         Assumes PK is 'USER#{user_id}' and SK is 'USER_PROFILE'.
+        The model auto-generates a 7-digit user_display_id; we retry on collision.
         """
-        profile = UserProfileModel(
-            user_id=user_id,
-            email=email,
-            name=name,
-            created_at=datetime.utcnow().isoformat(),  # always a string
-            # cached_map_location will default to Manhattan if not provided
-        )
+        max_retries = 10
+        for attempt in range(max_retries):
+            profile = UserProfileModel(
+                user_id=user_id,
+                email=email,
+                name=name,
+                provider=provider,
+                created_at=datetime.utcnow().isoformat(),
+            )
+            # Check uniqueness of the auto-generated display_id
+            if not self.get_user_by_display_id(profile.user_display_id):
+                break
+            self.logger.warning(
+                f"user_display_id collision ({profile.user_display_id}), retrying ({attempt + 1}/{max_retries})"
+            )
+        else:
+            raise RuntimeError(
+                f"Failed to generate unique user_display_id after {max_retries} retries"
+            )
         item = profile.dict()
         item["PK"] = f"USER#{user_id}"
         item["SK"] = self.sk
@@ -81,6 +129,31 @@ class UserProfileHelper:
                         if pk_value.startswith("USER#")
                         else pk_value
                     )
+
+                    # Backfill user_display_id if missing
+                    display_id = item.get("user_display_id")
+                    if display_id is None:
+                        # Model validator auto-generates a 7-digit ID
+                        display_id = UserProfileModel(
+                            user_id=user_id_value,
+                            email=item.get("email", "backfill@placeholder.com"),
+                            name=item.get("name", "unknown"),
+                            created_at=item.get("created_at", ""),
+                        ).user_display_id
+                        try:
+                            self.table.update_item(
+                                Key={"PK": item["PK"], "SK": self.sk},
+                                UpdateExpression="SET user_display_id = :did",
+                                ExpressionAttributeValues={":did": display_id},
+                            )
+                            self.logger.info(
+                                f"Backfilled user_display_id={display_id} for {user_id_value}"
+                            )
+                        except ClientError as e:
+                            self.logger.error(
+                                f"Failed to backfill user_display_id for {user_id_value}: {e}"
+                            )
+
                     result = {
                         "user_id": user_id_value,
                         "email": item.get("email"),
@@ -92,6 +165,7 @@ class UserProfileHelper:
                             "cached_map_location", (40.7831, -73.9712)
                         ),
                         "distance_unit": item.get("distance_unit", "Imperial"),
+                        "user_display_id": int(display_id),
                     }
                     return result
                 last_evaluated_key = response.get("LastEvaluatedKey")
@@ -147,6 +221,26 @@ class UserProfileHelper:
             before_item = self.table.get_item(
                 Key={"PK": f"USER#{user_id}", "SK": self.sk}
             ).get("Item")
+
+            # Backfill user_display_id if missing on the existing item
+            if before_item and "user_display_id" not in before_item:
+                backfill_model = UserProfileModel(
+                    user_id=before_item.get("user_id", user_id),
+                    email=before_item.get("email", "backfill@placeholder.com"),
+                    name=before_item.get("name", "unknown"),
+                    created_at=before_item.get("created_at", ""),
+                )
+                backfill_id = backfill_model.user_display_id
+                self.table.update_item(
+                    Key={"PK": f"USER#{user_id}", "SK": self.sk},
+                    UpdateExpression="SET user_display_id = :did",
+                    ExpressionAttributeValues={":did": backfill_id},
+                )
+                before_item["user_display_id"] = backfill_id
+                self.logger.info(
+                    f"Backfilled user_display_id={backfill_id} for {user_id} during update"
+                )
+
             before = UserProfileModel(**before_item) if before_item else None
 
             response = self.table.update_item(
@@ -222,7 +316,7 @@ class UserProfileHelper:
                     ":val": {"BOOL": True},
                     ":sk": {"S": self.sk},
                 },
-                ProjectionExpression="PK,#n,SK",
+                ProjectionExpression="PK,#n,SK,user_display_id",
                 ExpressionAttributeNames={"#n": "name"},
             ):
                 items = page.get("Items", [])
@@ -232,6 +326,11 @@ class UserProfileHelper:
                     profile = {
                         "user_id": item["PK"]["S"].replace("USER#", ""),
                         "name": item.get("name", {}).get("S"),
+                        "user_display_id": (
+                            int(item["user_display_id"]["N"])
+                            if "user_display_id" in item
+                            else None
+                        ),
                     }
                     public_profiles.append(profile)
             self.logger.info(f"Fetched {len(public_profiles)} public profiles")
