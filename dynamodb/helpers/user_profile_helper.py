@@ -187,6 +187,7 @@ class UserProfileHelper:
         beta_features: bool = None,
         cached_map_location: tuple = None,
         distance_unit: str = None,
+        show_workout_source: bool = None,
     ):
         """
         Update only the provided fields (name, email, public_profile, beta_features, cached_map_location) of the user profile.

@@ -47,8 +47,6 @@ def get_public_users(request: Request):
         strava_profile = strava_profile_helper.get_strava_profile(
             user_id=user["user_id"]
         )
-        if not strava_profile:
-            pass
         if strava_profile:
             user_profile_dict["firstname"] = strava_profile.get("firstname", None)
             user_profile_dict["lastname"] = strava_profile.get("lastname", None)
@@ -58,7 +56,14 @@ def get_public_users(request: Request):
             )
             user_profile_dict["profile"] = strava_profile.get("profile", None)
             user_profile_dict["strava_id"] = strava_profile.get("strava_id", None)
+        else:
+            user_profile_dict["firstname"] = None
+            user_profile_dict["lastname"] = None
+            user_profile_dict["city"] = None
+            user_profile_dict["profile_medium"] = None
+            user_profile_dict["profile"] = None
+            user_profile_dict["strava_id"] = None
 
         profile_return.append(user_profile_dict)
 
-    return JSONResponse(content={"public_users": public_users}, status_code=200)
+    return JSONResponse(content={"public_users": profile_return}, status_code=200)

@@ -56,7 +56,7 @@ def get_health_workouts(
         next_token=dynamo_next_token,
         projection_expression=(
             "workout_uuid, #n, workout_activity_type, start_date, "
-            "distance, duration, active_energy_burned, elevation_ascended, "
+            "total_distance, duration, total_energy_burned, elevation_ascended, "
             "summary_polyline, average_speed, average_heartrate, max_heartrate, "
             "locations"
         ),

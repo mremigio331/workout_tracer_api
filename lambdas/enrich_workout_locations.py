@@ -1,20 +1,29 @@
 import json
 from aws_lambda_powertools import Logger
 from dynamodb.helpers.strava_workout_helper import StravaWorkoutHelper
+from dynamodb.helpers.apple_health_workout_helper import AppleHealthWorkoutHelper
 from constants.general import KML_LOCATION_FILES, ALLOWLISTED_LOCATIONS
 
 logger = Logger(service="workout-tracer-enrich-workout-locations")
 
 
-def _enrich_workout(user_id, workout_id, request_id):
-    workout_helper = StravaWorkoutHelper(request_id=request_id)
+def _enrich_workout(user_id, workout_id, request_id, source="strava"):
+    if source == "apple_health":
+        workout_helper = AppleHealthWorkoutHelper(request_id=request_id)
+        workout = workout_helper.get_apple_health_workout(user_id, workout_id)
+    else:
+        workout_helper = StravaWorkoutHelper(request_id=request_id)
+        workout = workout_helper.get_strava_workout(user_id, workout_id)
 
-    workout = workout_helper.get_strava_workout(user_id, workout_id)
     if not workout:
         logger.error(f"Workout {workout_id} not found for user {user_id}.")
         raise ValueError(f"Workout {workout_id} not found.")
 
-    polyline_str = (workout.get("map") or {}).get("summary_polyline")
+    if source == "apple_health":
+        polyline_str = workout.get("summary_polyline")
+    else:
+        polyline_str = (workout.get("map") or {}).get("summary_polyline")
+
     if not polyline_str:
         logger.info(f"No polyline for workout {workout_id}, skipping enrichment.")
         return {"message": "No polyline, skipped."}
@@ -54,7 +63,10 @@ def lambda_handler(event, context):
         for record in records:
             body = json.loads(record["body"])
             user_id = body.get("user_id")
-            workout_id = int(body.get("workout_id"))
+            source = body.get("source", "strava")
+            workout_id = body.get("workout_id")
+            if source == "strava":
+                workout_id = int(workout_id)
             if not user_id or not workout_id:
                 logger.error(
                     f"Missing user_id or workout_id in SQS record: {record['messageId']}"
@@ -62,10 +74,10 @@ def lambda_handler(event, context):
                 batch_item_failures.append({"itemIdentifier": record["messageId"]})
                 continue
             logger.info(
-                f"Processing enrichment for user_id={user_id}, workout_id={workout_id}"
+                f"Processing enrichment for user_id={user_id}, workout_id={workout_id}, source={source}"
             )
             try:
-                _enrich_workout(user_id, workout_id, request_id)
+                _enrich_workout(user_id, workout_id, request_id, source=source)
             except Exception as e:
                 logger.error(
                     f"Failed to enrich workout {workout_id} for user {user_id}: {e}"
@@ -75,10 +87,15 @@ def lambda_handler(event, context):
 
     # Direct invocation (backward compat)
     user_id = event.get("user_id")
-    workout_id = int(event.get("workout_id"))
+    source = event.get("source", "strava")
+    workout_id = event.get("workout_id")
+    if source == "strava":
+        workout_id = int(workout_id)
     if not user_id or not workout_id:
         logger.error("Missing user_id or workout_id in event.")
         return {"error": "user_id and workout_id are required."}
 
-    logger.info(f"Starting enrichment for user_id={user_id}, workout_id={workout_id}")
-    return _enrich_workout(user_id, workout_id, request_id)
+    logger.info(
+        f"Starting enrichment for user_id={user_id}, workout_id={workout_id}, source={source}"
+    )
+    return _enrich_workout(user_id, workout_id, request_id, source=source)

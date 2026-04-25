@@ -28,6 +28,9 @@ class UpdateUserProfileRequest(BaseModel):
     distance_unit: Optional[str] = Field(
         None, description="Distance unit for the user (e.g., Imperial, Metric)"
     )
+    show_workout_source: Optional[bool] = Field(
+        None, description="Whether to show workout source on public profile"
+    )
 
 
 @router.put("/profile", response_model=UpdateUserProfileRequest)
@@ -53,6 +56,7 @@ def update_user_profile(request: Request, user_profile: UpdateUserProfileRequest
             email=user_profile.email,
             public_profile=user_profile.public_profile,
             distance_unit=user_profile.distance_unit,
+            show_workout_source=user_profile.show_workout_source,
         )
         # Use dict() for Pydantic models, fallback to __dict__ for others
         if updated_profile:

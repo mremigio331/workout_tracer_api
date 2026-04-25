@@ -15,6 +15,7 @@ class UserProfileModel(BaseModel):
     provider: str = "Cognito"
     distance_unit: str = "Imperial"  # "Imperial" for miles/feet, "Metric" for km/m
     user_display_id: Optional[int] = None
+    show_workout_source: bool = False
 
     @validator("user_display_id", always=True, pre=True)
     def generate_display_id(cls, v):
