@@ -5,6 +5,11 @@ from endpoints.user import (
     update_user_profile,
     get_public_users,
 )
+from endpoints.health import (
+    import_health_workouts,
+    get_health_workouts,
+    delete_health_workout,
+)
 from endpoints.strava import (
     get_requestor_strava_profile,
     get_strava_profile,
@@ -29,11 +34,16 @@ def get_all_routes(app):
     # General
     app.include_router(home.router, tags=["General"])
 
-    # User
-    app.include_router(get_user_profile.router, prefix="/user", tags=["User"])
-    app.include_router(update_user_profile.router, prefix="/user", tags=["User"])
-    app.include_router(get_requestors_profile.router, prefix="/user", tags=["User"])
-    app.include_router(get_public_users.router, prefix="/user", tags=["User"])
+    # Apple Health
+    app.include_router(
+        import_health_workouts.router, prefix="/applehealth", tags=["AppleHealth"]
+    )
+    app.include_router(
+        get_health_workouts.router, prefix="/applehealth", tags=["AppleHealth"]
+    )
+    app.include_router(
+        delete_health_workout.router, prefix="/applehealth", tags=["AppleHealth"]
+    )
 
     # Strava
     app.include_router(
@@ -69,5 +79,11 @@ def get_all_routes(app):
     app.include_router(
         get_public_workout_locations.router, prefix="/strava", tags=["Strava"]
     )
+
+    # User
+    app.include_router(get_user_profile.router, prefix="/user", tags=["User"])
+    app.include_router(update_user_profile.router, prefix="/user", tags=["User"])
+    app.include_router(get_requestors_profile.router, prefix="/user", tags=["User"])
+    app.include_router(get_public_users.router, prefix="/user", tags=["User"])
 
     return app
