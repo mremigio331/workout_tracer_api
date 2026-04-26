@@ -167,6 +167,7 @@ class UserProfileHelper:
                         ),
                         "distance_unit": item.get("distance_unit", "Imperial"),
                         "user_display_id": int(display_id),
+                        "show_workout_source": item.get("show_workout_source", False),
                     }
                     return result
                 last_evaluated_key = response.get("LastEvaluatedKey")
