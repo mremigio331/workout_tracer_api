@@ -10,6 +10,11 @@ from endpoints.health import (
     get_health_workouts,
     delete_health_workout,
 )
+from endpoints.public import (
+    get_public_workouts,
+    get_public_profile,
+    get_public_workout_locations as public_workout_locations,
+)
 from endpoints.strava import (
     get_requestor_strava_profile,
     get_strava_profile,
@@ -43,6 +48,13 @@ def get_all_routes(app):
     )
     app.include_router(
         delete_health_workout.router, prefix="/applehealth", tags=["AppleHealth"]
+    )
+
+    # Public
+    app.include_router(get_public_workouts.router, prefix="/public", tags=["Public"])
+    app.include_router(get_public_profile.router, prefix="/public", tags=["Public"])
+    app.include_router(
+        public_workout_locations.router, prefix="/public", tags=["Public"]
     )
 
     # Strava

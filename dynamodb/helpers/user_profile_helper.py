@@ -50,6 +50,7 @@ class UserProfileHelper:
                     "user_display_id": item.get("user_display_id"),
                     "distance_unit": item.get("distance_unit", "Imperial"),
                     "created_at": item.get("created_at"),
+                    "show_workout_source": item.get("show_workout_source", False),
                 }
             return None
         except ClientError as e:
