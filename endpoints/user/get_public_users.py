@@ -43,27 +43,33 @@ def get_public_users(request: Request):
     profile_return = []
 
     for user in public_users:
-        user_profile_dict = user
+        # Backfill user_display_id if missing
+        display_id = user.get("user_display_id")
+        if display_id is None:
+            profile = user_helper.get_user_profile(user_id=user["user_id"])
+            display_id = profile.get("user_display_id") if profile else None
+
         strava_profile = strava_profile_helper.get_strava_profile(
             user_id=user["user_id"]
         )
-        if strava_profile:
-            user_profile_dict["firstname"] = strava_profile.get("firstname", None)
-            user_profile_dict["lastname"] = strava_profile.get("lastname", None)
-            user_profile_dict["city"] = strava_profile.get("city", None)
-            user_profile_dict["profile_medium"] = strava_profile.get(
-                "profile_medium", None
-            )
-            user_profile_dict["profile"] = strava_profile.get("profile", None)
-            user_profile_dict["strava_id"] = strava_profile.get("strava_id", None)
-        else:
-            user_profile_dict["firstname"] = None
-            user_profile_dict["lastname"] = None
-            user_profile_dict["city"] = None
-            user_profile_dict["profile_medium"] = None
-            user_profile_dict["profile"] = None
-            user_profile_dict["strava_id"] = None
 
-        profile_return.append(user_profile_dict)
+        public_user = {
+            "name": user.get("name"),
+            "user_display_id": int(display_id) if display_id is not None else None,
+            "strava_id": (
+                int(strava_profile.get("strava_id"))
+                if strava_profile and strava_profile.get("strava_id")
+                else None
+            ),
+            "firstname": strava_profile.get("firstname") if strava_profile else None,
+            "lastname": strava_profile.get("lastname") if strava_profile else None,
+            "city": strava_profile.get("city") if strava_profile else None,
+            "profile_medium": (
+                strava_profile.get("profile_medium") if strava_profile else None
+            ),
+            "profile": strava_profile.get("profile") if strava_profile else None,
+        }
+
+        profile_return.append(public_user)
 
     return JSONResponse(content={"public_users": profile_return}, status_code=200)
