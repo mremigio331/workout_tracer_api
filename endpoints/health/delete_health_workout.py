@@ -3,9 +3,16 @@ from fastapi.responses import JSONResponse
 from aws_lambda_powertools import Logger
 from decorators.exceptions_decorator import exceptions_decorator
 from dynamodb.helpers.apple_health_workout_helper import AppleHealthWorkoutHelper
+from aws_lambda_powertools.metrics import Metrics, MetricUnit
+import os
 
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
+
+stage = os.environ.get("STAGE", "dev")
+metrics = Metrics(
+    namespace=f"WorkoutTracer-{stage.upper()}", service="workout-tracer-api"
+)
 
 
 @router.delete(
@@ -29,6 +36,9 @@ def delete_health_workout(request: Request, workout_uuid: str):
     )
 
     if deleted:
+        metrics.add_dimension(name="SourceType", value="AppleHealth")
+        metrics.add_metric(name="WorkoutDeleted", unit=MetricUnit.Count, value=1)
+        metrics.flush_metrics()
         return JSONResponse(
             content={"message": f"Workout {workout_uuid} deleted successfully."},
             status_code=200,

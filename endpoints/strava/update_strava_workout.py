@@ -13,10 +13,16 @@ from datetime import datetime, timedelta
 import os
 import decimal
 from dynamodb.helpers.strava_workout_helper import StravaWorkoutHelper
+from aws_lambda_powertools.metrics import Metrics, MetricUnit
 import pytz
 
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
+
+stage = os.environ.get("STAGE", "dev")
+metrics = Metrics(
+    namespace=f"WorkoutTracer-{stage.upper()}", service="workout-tracer-api"
+)
 
 
 @router.post(
@@ -72,8 +78,18 @@ def update_workout(activity_id: int, request: Request = None):
             )
             if action == "create":
                 create_count += 1
+                metrics.add_dimension(name="SourceType", value="Strava")
+                metrics.add_metric(
+                    name="WorkoutCreated", unit=MetricUnit.Count, value=1
+                )
+                metrics.flush_metrics()
             elif action == "update":
                 update_count += 1
+                metrics.add_dimension(name="SourceType", value="Strava")
+                metrics.add_metric(
+                    name="WorkoutUpdated", unit=MetricUnit.Count, value=1
+                )
+                metrics.flush_metrics()
         except Exception as e:
             error_count += 1
             logger.error(f"Failed to store activity for user_id {user_id}: {e}")

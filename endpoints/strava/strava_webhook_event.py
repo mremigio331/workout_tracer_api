@@ -12,9 +12,15 @@ from clients.strava_client import StravaClient
 from dynamodb.helpers.strava_profile_helper import StravaProfileHelper
 from dynamodb.helpers.strava_workout_helper import StravaWorkoutHelper
 from dynamodb.helpers.strava_credentials_helper import StravaCredentialsHelper
+from aws_lambda_powertools.metrics import Metrics, MetricUnit
 
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
+
+stage = os.environ.get("STAGE", "dev")
+metrics = Metrics(
+    namespace=f"WorkoutTracer-{stage.upper()}", service="workout-tracer-api"
+)
 
 
 class StravaWebhookEvent(BaseModel):
@@ -74,6 +80,16 @@ def strava_webhook_event(payload: StravaWebhookEvent, request: Request):
                 logger.info(
                     f"Deleted Strava workout {workout_id} for user_id {user_id}"
                 )
+                metrics.add_dimension(name="EventType", value="delete")
+                metrics.add_metric(
+                    name="WebhookEventCount", unit=MetricUnit.Count, value=1
+                )
+                metrics.flush_metrics()
+                metrics.add_dimension(name="SourceType", value="Strava")
+                metrics.add_metric(
+                    name="WorkoutDeleted", unit=MetricUnit.Count, value=1
+                )
+                metrics.flush_metrics()
                 return JSONResponse(
                     content={
                         "message": f"Workout {workout_id} deleted for user {user_id}."
@@ -151,6 +167,23 @@ def strava_webhook_event(payload: StravaWebhookEvent, request: Request):
                 logger.info(
                     f"{action.capitalize()}d Strava workout {workout_id} for user_id {user_id}"
                 )
+                metrics.add_dimension(name="EventType", value=payload.aspect_type)
+                metrics.add_metric(
+                    name="WebhookEventCount", unit=MetricUnit.Count, value=1
+                )
+                metrics.flush_metrics()
+                if action == "create":
+                    metrics.add_dimension(name="SourceType", value="Strava")
+                    metrics.add_metric(
+                        name="WorkoutCreated", unit=MetricUnit.Count, value=1
+                    )
+                    metrics.flush_metrics()
+                elif action == "update":
+                    metrics.add_dimension(name="SourceType", value="Strava")
+                    metrics.add_metric(
+                        name="WorkoutUpdated", unit=MetricUnit.Count, value=1
+                    )
+                    metrics.flush_metrics()
             except Exception as e:
                 logger.error(
                     f"Failed to {payload.aspect_type} workout {workout_id} for user {user_id}: {e}"

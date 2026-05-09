@@ -8,6 +8,7 @@ from endpoints.user import (
 from endpoints.health import (
     import_health_workouts,
     get_health_workouts,
+    get_health_workout_ids,
     delete_health_workout,
 )
 from endpoints.public import (
@@ -42,6 +43,9 @@ def get_all_routes(app):
     )
     app.include_router(
         get_health_workouts.router, prefix="/applehealth", tags=["AppleHealth"]
+    )
+    app.include_router(
+        get_health_workout_ids.router, prefix="/applehealth", tags=["AppleHealth"]
     )
     app.include_router(
         delete_health_workout.router, prefix="/applehealth", tags=["AppleHealth"]

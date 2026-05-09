@@ -3,10 +3,17 @@ from fastapi.responses import JSONResponse
 from aws_lambda_powertools import Logger
 from decorators.exceptions_decorator import exceptions_decorator
 from dynamodb.helpers.apple_health_workout_helper import AppleHealthWorkoutHelper
+from aws_lambda_powertools.metrics import Metrics, MetricUnit
 from typing import List
+import os
 
 logger = Logger(service="workout-tracer-api")
 router = APIRouter()
+
+stage = os.environ.get("STAGE", "dev")
+metrics = Metrics(
+    namespace=f"WorkoutTracer-{stage.upper()}", service="workout-tracer-api"
+)
 
 MAX_BATCH_SIZE = 100
 
@@ -50,8 +57,18 @@ def import_health_workouts(request: Request, payloads: List[dict]):
             )
             if action == "create":
                 created += 1
+                metrics.add_dimension(name="SourceType", value="AppleHealth")
+                metrics.add_metric(
+                    name="WorkoutCreated", unit=MetricUnit.Count, value=1
+                )
+                metrics.flush_metrics()
             elif action == "update":
                 updated += 1
+                metrics.add_dimension(name="SourceType", value="AppleHealth")
+                metrics.add_metric(
+                    name="WorkoutUpdated", unit=MetricUnit.Count, value=1
+                )
+                metrics.flush_metrics()
         except Exception as e:
             errors += 1
             logger.error(f"Failed to import workout for user_id={user_id}: {e}")
